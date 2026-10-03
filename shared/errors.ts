@@ -10,11 +10,14 @@ export const AUTHENTICATION_ERROR_CODES = [
   'mfa-required',
   'invalid-mfa-code',
   'email-not-verified',
+  'password-rejected',
+  'invalid-or-expired-token',
   'reauthentication-required',
   'insufficient-assurance',
   'unauthenticated',
   'session-expired',
   'rate-limited',
+  'origin-rejected',
   'validation-failed',
   'unavailable',
 ] as const
@@ -27,16 +30,23 @@ export const AUTHENTICATION_ERROR_STATUS: Readonly<Record<AuthenticationErrorCod
   'mfa-required': 401,
   'invalid-mfa-code': 401,
   'email-not-verified': 403,
+  'password-rejected': 400,
+  'invalid-or-expired-token': 400,
   'reauthentication-required': 401,
   'insufficient-assurance': 403,
   'unauthenticated': 401,
   'session-expired': 401,
   'rate-limited': 429,
+  'origin-rejected': 403,
   'validation-failed': 400,
   'unavailable': 503,
 }
 
-/** JSON body returned by the layer's HTTP endpoints on failure. */
+/**
+ * Error detail carried by every failure from the layer's HTTP endpoints and
+ * server helpers. It is delivered as the `data` field of the h3/Nuxt error
+ * response, alongside the standard `statusCode`.
+ */
 export interface AuthenticationErrorBody {
   code: AuthenticationErrorCode
   /** Localisation key for the user-facing message, e.g. `authentication.error.invalid-credentials`. */

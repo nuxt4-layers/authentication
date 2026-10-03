@@ -4,7 +4,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.1.0, phase 1 (foundation).** The public contract, composition ports, policy and test harness are in place. The authentication engine, endpoints and UI arrive in later phases; see [docs/roadmap.md](docs/roadmap.md).
+> **Status: 0.2.0, phase 2 (core).** Email and password sign-up, verification, sign-in, sign-out, password reset and change, session management, lockout and throttling all work end to end on PostgreSQL. Multi-factor authentication, federation and default pages follow; see [docs/roadmap.md](docs/roadmap.md).
 
 ## Bounded responsibility
 
@@ -27,12 +27,12 @@ Authentication is **tenant-agnostic**. It publishes one fact, the `Authenticated
 @nuxt4-layers/authentication/capability   Capability manifest
 ```
 
-Server-side, the layer auto-imports these composition functions for the host:
+The layer also provides these, auto-imported for the host:
 
-- `provideAuthenticationDatabase`
-- `provideAuthenticationMailer`
-- `provideAuthenticationEventSink`
-- `provideAuthenticationPolicy`
+- **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `migrateAuthenticationDatabase`.
+- **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`.
+- **Client:** the `useAuthentication()` composable, and the `authenticated` and `guest` route middleware.
+- **HTTP:** endpoints under `/api/authentication/*`.
 
 Every other path is private. See [docs/contracts.md](docs/contracts.md).
 
@@ -68,10 +68,28 @@ export default defineNitroPlugin(() => {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
 
   provideAuthenticationDatabase({ dialect: 'postgres', pool })            // required
+  migrateAuthenticationDatabase()                                          // applies pending migrations
   provideAuthenticationMailer({ send: message => mailer.send(message) })  // required
   provideAuthenticationEventSink({ emit: event => audit.record(event) })  // optional
   provideAuthenticationPolicy({ password: { minLength: 16 } })            // optional
 })
+```
+
+Protect server routes on the server; route middleware is only a user-experience guard:
+
+```ts
+// server/api/account/profile.get.ts
+export default defineEventHandler(async (event) => {
+  const principal = await requireAuthenticatedPrincipal(event)          // 401 if signed out
+  return loadProfile(principal.principalId)
+})
+```
+
+```vue
+<script setup lang="ts">
+definePageMeta({ middleware: 'authenticated' })
+const { principal, signOut } = useAuthentication()
+</script>
 ```
 
 See [docs/composition-contract.md](docs/composition-contract.md) for the full contract, including persistence ([ADR-0002](https://github.com/nuxt4-layers/platform-architecture/blob/main/docs/decisions/ADR-0002-composition-supplied-persistence-and-capability-owned-schemas.md)) and configuration.
@@ -81,7 +99,10 @@ See [docs/composition-contract.md](docs/composition-contract.md) for the full co
 | Runtime config | Environment variable | Purpose |
 |---|---|---|
 | `authentication.secret` | `NUXT_AUTHENTICATION_SECRET` | Signing/encryption secret, at least 32 random bytes. Server-only. |
-| `authentication.baseUrl` | `NUXT_AUTHENTICATION_BASE_URL` | Canonical external origin used in links and origin checks. |
+| `authentication.baseUrl` | `NUXT_AUTHENTICATION_BASE_URL` | Canonical external origin used in links and origin checks. Must be https in production. |
+| `authentication.trustProxy` | `NUXT_AUTHENTICATION_TRUST_PROXY` | Read client IPs from `X-Forwarded-For`. Enable only behind a proxy that overwrites it. |
+| `public.authentication.routes` | `NUXT_PUBLIC_AUTHENTICATION_ROUTES_*` | Sign-in, after-sign-in, after-sign-out and reset-password paths. |
+| `public.authentication.locale` | `NUXT_PUBLIC_AUTHENTICATION_LOCALE` | Locale passed to the mailer (default `en-GB`). |
 
 Secrets come from deployment secret management and are never committed.
 
@@ -93,12 +114,14 @@ The layer targets **OWASP ASVS 5.0 Level 2**, applying relevant Level 3 requirem
 
 ```bash
 pnpm install          # also runs nuxt prepare
-pnpm test             # Vitest
+pnpm test             # Vitest (database suites need AUTHENTICATION_TEST_DATABASE_URL)
 pnpm typecheck        # nuxt typecheck (layer, shared, contracts, tests, playground)
 pnpm check            # typecheck + test
-pnpm dev              # run the playground composition harness
+pnpm dev              # run the playground (set AUTHENTICATION_DATABASE_URL)
 pnpm build:playground # production build of the playground
 ```
+
+Database and end-to-end suites run against a **disposable local PostgreSQL**, never a hosted one. Point `AUTHENTICATION_TEST_DATABASE_URL` at an admin connection (for example `postgres://postgres@localhost:5432/postgres`); each suite creates and drops its own database. Without it those suites are skipped locally and **fail in CI**.
 
 ## Documentation
 

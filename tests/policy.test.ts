@@ -30,6 +30,7 @@ describe('Authentication policy', () => {
     ['maximum length below 64', { password: { maxLength: 32 } }],
     ['non-integer length', { password: { minLength: 12.5 } }],
     ['throttle allowing too few attempts', { signInThrottle: { maxFailedAttempts: 1 } }],
+    ['per-client limit too low for shared addresses', { signInThrottle: { maxFailedAttemptsPerClient: 5 } }],
     ['re-authentication window over an hour', { reauthentication: { maxAgeSeconds: 7_200 } }],
     ['idle timeout longer than absolute lifetime', { session: { idleTimeoutSeconds: 90_000 } }],
   ])('rejects %s', (_label, input) => {

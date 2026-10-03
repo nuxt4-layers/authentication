@@ -1,6 +1,6 @@
 {
   "name": "@nuxt4-layers/authentication",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Nuxt 4 foundation capability that establishes who has signed in and manages the secure lifecycle of the authenticated session.",
@@ -33,14 +33,20 @@
     "check": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
+    "better-auth": "^1.7.7",
+    "h3": "^1.15.11",
+    "kysely": "^0.29.6",
     "zod": "^4.6.5"
   },
   "peerDependencies": {
     "nuxt": "^4.5.0"
   },
   "devDependencies": {
+    "@nuxt/test-utils": "^4.3.3",
     "@types/node": "^24.13.6",
+    "@types/pg": "^8.23.1",
     "nuxt": "^4.5.2",
+    "pg": "^8.23.1",
     "typescript": "^6.0.3",
     "vitest": "^5.0.3",
     "vue-tsc": "^3.3.11"

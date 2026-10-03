@@ -25,6 +25,8 @@ const policySchema = z.object({
   signInThrottle: z.object({
     /** Failed attempts per account within the window before a temporary lockout. */
     maxFailedAttempts: z.int().min(3).max(100),
+    /** Failed attempts per client IP within the window before it is rate limited. Sized for shared NAT addresses. */
+    maxFailedAttemptsPerClient: z.int().min(10).max(10_000),
     windowSeconds: z.int().min(60).max(86_400),
     lockoutSeconds: z.int().min(60).max(86_400),
   }).strict(),
@@ -62,7 +64,7 @@ export type AuthenticationPolicyInput = {
 
 export const DEFAULT_AUTHENTICATION_POLICY: Readonly<AuthenticationPolicy> = Object.freeze({
   password: Object.freeze({ minLength: 15, maxLength: 128, compromisedCheck: 'hibp-range' as const }),
-  signInThrottle: Object.freeze({ maxFailedAttempts: 5, windowSeconds: 900, lockoutSeconds: 900 }),
+  signInThrottle: Object.freeze({ maxFailedAttempts: 5, maxFailedAttemptsPerClient: 50, windowSeconds: 900, lockoutSeconds: 900 }),
   session: Object.freeze({ idleTimeoutSeconds: 3_600, absoluteLifetimeSeconds: 86_400 }),
   reauthentication: Object.freeze({ maxAgeSeconds: 900 }),
   mfa: 'required' as const,

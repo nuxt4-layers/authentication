@@ -20,6 +20,7 @@ export type {
   AuthenticationRequirement,
   AuthenticationSessionSummary,
 } from '../shared/principal'
+export type { AuthenticationResult } from '../shared/client'
 
 // ---------------------------------------------------------------------------
 // Errors

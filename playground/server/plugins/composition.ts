@@ -1,18 +1,48 @@
+import pg from 'pg'
+import type { AuthenticationEvent, AuthenticationMessage } from '../../../contracts'
+
 /**
  * Playground composition root: supplies the authentication ports the way a
- * host application would. The database port is added once the engine lands.
+ * host application would.
+ *
+ * Environment:
+ * - AUTHENTICATION_DATABASE_URL       PostgreSQL connection string (required to sign in)
+ * - AUTHENTICATION_PLAYGROUND_TEST=1  in-memory mailbox/event log for tests; no HIBP calls
  */
+export interface PlaygroundRecorder {
+  messages: AuthenticationMessage[]
+  events: AuthenticationEvent[]
+}
+
+const recorder: PlaygroundRecorder = { messages: [], events: [] }
+const testMode = process.env.AUTHENTICATION_PLAYGROUND_TEST === '1'
+;(globalThis as { __authenticationPlayground?: PlaygroundRecorder }).__authenticationPlayground = testMode ? recorder : undefined
+
 export default defineNitroPlugin(() => {
+  const connectionString = process.env.AUTHENTICATION_DATABASE_URL
+  if (connectionString) {
+    provideAuthenticationDatabase({ dialect: 'postgres', pool: new pg.Pool({ connectionString }) })
+    migrateAuthenticationDatabase()
+  }
+
   provideAuthenticationMailer({
     async send(message) {
-      // Development mailer: never log actionUrl, which carries a single-use secret.
+      if (testMode) recorder.messages.push(message)
+      // Never log actionUrl: it carries a single-use secret.
       console.info(`[playground mailer] ${message.kind} to ${message.to} (${message.locale})`)
     },
   })
 
   provideAuthenticationEventSink({
     emit(event) {
-      console.info(`[playground events] ${event.type}`, { principalId: event.principalId, reason: event.reason })
+      if (testMode) recorder.events.push(event)
     },
   })
+
+  if (testMode) {
+    provideAuthenticationPolicy({
+      password: { compromisedCheck: 'disabled' },
+      signInThrottle: { maxFailedAttempts: 3, maxFailedAttemptsPerClient: 10_000 },
+    })
+  }
 })
