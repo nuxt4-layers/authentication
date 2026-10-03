@@ -42,6 +42,7 @@ export async function useAuthenticationRuntime(): Promise<AuthenticationRuntime>
     secret: config.authentication.secret,
     baseUrl: config.authentication.baseUrl,
     locale: config.public.authentication.locale,
+    appName: config.public.authentication.appName,
     routes: config.public.authentication.routes,
     production: !import.meta.dev,
   })
@@ -54,6 +55,7 @@ export function trustProxy(): boolean {
 }
 
 const CONTEXT_KEY = 'authenticationPrincipal'
+const TOKEN_KEY = 'authenticationSessionToken'
 
 /**
  * Resolves the current principal once per request. Enforces the absolute
@@ -77,13 +79,20 @@ export async function resolvePrincipal(event: H3Event): Promise<AuthenticatedPri
     }
     else {
       principal = toPrincipal(session, lifetime)
+      event.context[TOKEN_KEY] = session.token
     }
   }
   event.context[CONTEXT_KEY] = principal
   return principal
 }
 
+/** The current session's token, available after a principal has been resolved. Never sent to clients. */
+export function currentSessionToken(event: H3Event): string | null {
+  return (event.context[TOKEN_KEY] as string | undefined) ?? null
+}
+
 /** Clears the per-request cache after the session changes within the same request. */
 export function forgetPrincipal(event: H3Event): void {
   delete event.context[CONTEXT_KEY]
+  delete event.context[TOKEN_KEY]
 }

@@ -10,6 +10,7 @@ describe('Authentication policy', () => {
     expect(policy.password.compromisedCheck).toBe('hibp-range')
     expect(policy.mfa).toBe('required')
     expect(policy.emailVerification).toBe('required')
+    expect(policy.rememberedDevice.days).toBe(0)
     expect(policy.session).toEqual({ idleTimeoutSeconds: 3_600, absoluteLifetimeSeconds: 86_400 })
   })
 
@@ -33,6 +34,7 @@ describe('Authentication policy', () => {
     ['per-client limit too low for shared addresses', { signInThrottle: { maxFailedAttemptsPerClient: 5 } }],
     ['re-authentication window over an hour', { reauthentication: { maxAgeSeconds: 7_200 } }],
     ['idle timeout longer than absolute lifetime', { session: { idleTimeoutSeconds: 90_000 } }],
+    ['remembered devices beyond 30 days', { rememberedDevice: { days: 31 } }],
   ])('rejects %s', (_label, input) => {
     expect(() => resolveAuthenticationPolicy(input as never)).toThrow()
   })

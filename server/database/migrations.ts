@@ -24,6 +24,19 @@ create index "verification_identifier_idx" on {{schema}}."verification" ("identi
 create table {{schema}}."sign_in_throttle" ("key" text not null primary key, "failures" integer not null, "window_started_at" timestamptz not null, "locked_until" timestamptz);
 `,
   },
+  {
+    id: '0002_multi_factor',
+    sql: `
+alter table {{schema}}."user" add column "twoFactorEnabled" boolean default false;
+create table {{schema}}."twoFactor" ("id" text not null primary key, "secret" text not null, "backupCodes" text not null, "userId" text not null references {{schema}}."user" ("id") on delete cascade, "verified" boolean, "failedVerificationCount" integer, "lockedUntil" timestamptz);
+create table {{schema}}."passkey" ("id" text not null primary key, "name" text, "publicKey" text not null, "userId" text not null references {{schema}}."user" ("id") on delete cascade, "credentialID" text not null, "counter" integer not null, "deviceType" text not null, "backedUp" boolean not null, "transports" text, "createdAt" timestamptz, "aaguid" text);
+create index "twoFactor_secret_idx" on {{schema}}."twoFactor" ("secret");
+create index "twoFactor_userId_idx" on {{schema}}."twoFactor" ("userId");
+create index "passkey_userId_idx" on {{schema}}."passkey" ("userId");
+create index "passkey_credentialID_idx" on {{schema}}."passkey" ("credentialID");
+create table {{schema}}."totp_last_step" ("user_id" text not null primary key references {{schema}}."user" ("id") on delete cascade, "step" bigint not null);
+`,
+  },
 ]
 
 const SCHEMA_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/

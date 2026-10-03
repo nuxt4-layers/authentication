@@ -30,6 +30,8 @@ export interface AuthenticationRuntimeInput {
   secret: string
   baseUrl: string
   locale: string
+  /** Shown in authenticator apps and passkey prompts. Defaults to the base URL's host. */
+  appName?: string
   routes: AuthenticationRoutes
   production: boolean
   fetch?: typeof fetch
@@ -37,6 +39,9 @@ export interface AuthenticationRuntimeInput {
 
 export interface AuthenticationRuntime {
   engine: ReturnType<typeof createEngine>
+  database: AuthenticationDatabase & { schema: string }
+  /** The engine secret, also used as the key for backup-code digests. */
+  secret: string
   throttle: SignInThrottle
   policy: AuthenticationPolicy
   isCompromisedPassword: CompromisedPasswordCheck
@@ -84,7 +89,8 @@ export function systemEvent(type: AuthenticationEvent['type'], principalId: stri
 }
 
 export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): AuthenticationRuntime {
-  const origin = validateRuntimeConfig(input).origin
+  const url = validateRuntimeConfig(input)
+  const origin = url.origin
   const { database, mailer, emit, policy, locale, routes } = input
 
   const send = async (message: Omit<AuthenticationMessage, 'locale'>) => {
@@ -107,6 +113,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     schema: database.schema,
     secret: input.secret,
     baseUrl: origin,
+    appName: input.appName || url.hostname,
     policy,
     hooks: {
       async sendVerificationEmail({ email, token }) {
@@ -144,6 +151,8 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
 
   return {
     engine,
+    database,
+    secret: input.secret,
     throttle,
     policy,
     isCompromisedPassword: policy.password.compromisedCheck === 'hibp-range'

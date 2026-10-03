@@ -25,6 +25,23 @@ const ENGINE_ERROR_CODES: Record<string, AuthenticationErrorCode> = {
   SESSION_EXPIRED: 'session-expired',
   SESSION_NOT_FRESH: 'reauthentication-required',
   UNAUTHORIZED: 'unauthenticated',
+  // Two-factor plugin
+  INVALID_CODE: 'invalid-mfa-code',
+  INVALID_BACKUP_CODE: 'invalid-mfa-code',
+  INVALID_TWO_FACTOR_COOKIE: 'unauthenticated',
+  ACCOUNT_TEMPORARILY_LOCKED: 'rate-limited',
+  TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: 'rate-limited',
+  TOTP_ALREADY_ENABLED: 'validation-failed',
+  TOTP_NOT_ENABLED: 'validation-failed',
+  TWO_FACTOR_NOT_ENABLED: 'validation-failed',
+  BACKUP_CODES_NOT_ENABLED: 'validation-failed',
+  // Passkey plugin
+  AUTHENTICATION_FAILED: 'invalid-credentials',
+  PASSKEY_NOT_FOUND: 'invalid-credentials',
+  CHALLENGE_NOT_FOUND: 'invalid-or-expired-token',
+  FAILED_TO_VERIFY_REGISTRATION: 'validation-failed',
+  PREVIOUSLY_REGISTERED: 'validation-failed',
+  YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY: 'validation-failed',
 }
 
 export function engineErrorCode(error: unknown): AuthenticationErrorCode {
@@ -48,6 +65,23 @@ export function requestHeaders(event: H3Event): Headers {
     if (typeof value === 'string') headers.set(name, value)
   }
   return headers
+}
+
+/**
+ * The session token in a Set-Cookie issued by the engine, if any. The cookie
+ * value is `<token>.<signature>`; when the engine rotates a session this is the
+ * only reliable place the new token appears.
+ */
+export function sessionTokenFromCookies(headers: Headers | undefined | null): string | null {
+  if (!headers) return null
+  for (const cookie of headers.getSetCookie()) {
+    const match = /^(?:__Secure-)?authentication\.session_token=([^;]+)/.exec(cookie)
+    if (!match?.[1]) continue
+    const value = decodeURIComponent(match[1])
+    const dot = value.lastIndexOf('.')
+    if (dot > 0) return value.slice(0, dot)
+  }
+  return null
 }
 
 /** Copies the engine's Set-Cookie headers onto the h3 response. */

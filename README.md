@@ -4,7 +4,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.2.0, phase 2 (core).** Email and password sign-up, verification, sign-in, sign-out, password reset and change, session management, lockout and throttling all work end to end on PostgreSQL. Multi-factor authentication, federation and default pages follow; see [docs/roadmap.md](docs/roadmap.md).
+> **Status: 0.3.0, phase 3 (multi-factor).** Email and password, verification, reset, sessions, lockout and throttling, plus TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication all work end to end on PostgreSQL. **MFA is required by default.** Federation and default pages follow; see [docs/roadmap.md](docs/roadmap.md).
 
 ## Bounded responsibility
 
@@ -30,7 +30,7 @@ Authentication is **tenant-agnostic**. It publishes one fact, the `Authenticated
 The layer also provides these, auto-imported for the host:
 
 - **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `migrateAuthenticationDatabase`.
-- **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`.
+- **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`. The latter requires aal2 by default while MFA is required.
 - **Client:** the `useAuthentication()` composable, and the `authenticated` and `guest` route middleware.
 - **HTTP:** endpoints under `/api/authentication/*`.
 
@@ -80,7 +80,7 @@ Protect server routes on the server; route middleware is only a user-experience 
 ```ts
 // server/api/account/profile.get.ts
 export default defineEventHandler(async (event) => {
-  const principal = await requireAuthenticatedPrincipal(event)          // 401 if signed out
+  const principal = await requireAuthenticatedPrincipal(event)          // 401 signed out, 403 below aal2
   return loadProfile(principal.principalId)
 })
 ```
@@ -101,8 +101,9 @@ See [docs/composition-contract.md](docs/composition-contract.md) for the full co
 | `authentication.secret` | `NUXT_AUTHENTICATION_SECRET` | Signing/encryption secret, at least 32 random bytes. Server-only. |
 | `authentication.baseUrl` | `NUXT_AUTHENTICATION_BASE_URL` | Canonical external origin used in links and origin checks. Must be https in production. |
 | `authentication.trustProxy` | `NUXT_AUTHENTICATION_TRUST_PROXY` | Read client IPs from `X-Forwarded-For`. Enable only behind a proxy that overwrites it. |
-| `public.authentication.routes` | `NUXT_PUBLIC_AUTHENTICATION_ROUTES_*` | Sign-in, after-sign-in, after-sign-out and reset-password paths. |
+| `public.authentication.routes` | `NUXT_PUBLIC_AUTHENTICATION_ROUTES_*` | Sign-in, after-sign-in, after-sign-out, reset-password and MFA (enrol / step-up) paths. |
 | `public.authentication.locale` | `NUXT_PUBLIC_AUTHENTICATION_LOCALE` | Locale passed to the mailer (default `en-GB`). |
+| `public.authentication.appName` | `NUXT_PUBLIC_AUTHENTICATION_APP_NAME` | Name in authenticator apps and passkey prompts (default: base URL host). |
 
 Secrets come from deployment secret management and are never committed.
 

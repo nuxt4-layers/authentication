@@ -1,12 +1,18 @@
 import type { H3Event } from 'h3'
-import type { AuthenticatedPrincipal, AuthenticationRequirement } from '../../contracts'
+import type { AuthenticatedPrincipal, AuthenticationAssuranceLevel, AuthenticationRequirement } from '../../contracts'
 import { authenticationError } from '../internal/http'
 import { resolvePrincipal, startMigrations } from '../internal/nitro'
 import { evaluateRequirement } from '../internal/principal'
+import { useAuthenticationPolicy } from './authentication-composition'
 
 /**
  * PUBLIC server helpers (auto-imported for the host's server code).
  */
+
+/** The assurance level the policy demands by default: aal2 when MFA is required. */
+export function requiredAssuranceLevel(): AuthenticationAssuranceLevel {
+  return useAuthenticationPolicy().mfa === 'required' ? 'aal2' : 'aal1'
+}
 
 /** The current principal, or null when the request has no valid session. */
 export function getAuthenticatedPrincipal(event: H3Event): Promise<AuthenticatedPrincipal | null> {
@@ -16,6 +22,10 @@ export function getAuthenticatedPrincipal(event: H3Event): Promise<Authenticated
 /**
  * The current principal, or a contract error:
  * `unauthenticated` (401), `insufficient-assurance` (403) or `reauthentication-required` (401).
+ *
+ * `minimumLevel` defaults to the policy's required level: `aal2` while
+ * `mfa: 'required'` (the default), so sessions that have not completed a second
+ * factor are refused. Pass `{ minimumLevel: 'aal1' }` to accept them explicitly.
  */
 export async function requireAuthenticatedPrincipal(
   event: H3Event,
@@ -23,7 +33,7 @@ export async function requireAuthenticatedPrincipal(
 ): Promise<AuthenticatedPrincipal> {
   const principal = await resolvePrincipal(event)
   if (!principal) throw authenticationError('unauthenticated')
-  const failure = evaluateRequirement(principal, requirement)
+  const failure = evaluateRequirement(principal, { minimumLevel: requiredAssuranceLevel(), ...requirement })
   if (failure) throw authenticationError(failure)
   return principal
 }

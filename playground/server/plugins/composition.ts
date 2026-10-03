@@ -8,6 +8,7 @@ import type { AuthenticationEvent, AuthenticationMessage } from '../../../contra
  * Environment:
  * - AUTHENTICATION_DATABASE_URL       PostgreSQL connection string (required to sign in)
  * - AUTHENTICATION_PLAYGROUND_TEST=1  in-memory mailbox/event log for tests; no HIBP calls
+ * - AUTHENTICATION_PLAYGROUND_MFA     'required' (default) or 'optional', in test mode
  */
 export interface PlaygroundRecorder {
   messages: AuthenticationMessage[]
@@ -41,6 +42,7 @@ export default defineNitroPlugin(() => {
 
   if (testMode) {
     provideAuthenticationPolicy({
+      mfa: process.env.AUTHENTICATION_PLAYGROUND_MFA === 'optional' ? 'optional' : 'required',
       password: { compromisedCheck: 'disabled' },
       signInThrottle: { maxFailedAttempts: 3, maxFailedAttemptsPerClient: 10_000 },
     })

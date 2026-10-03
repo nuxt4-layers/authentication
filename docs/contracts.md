@@ -27,6 +27,17 @@ The single fact authentication publishes:
 
 The principal carries **no tenant, group or role**. Those belong to Identity and Authorization (Platform Architecture §6).
 
+How `assurance` is derived:
+
+| Methods | Level | Phishing resistant |
+|---|---|---|
+| `password` | `aal1` | no |
+| `password` + `totp`, or `password` + `backup-code` | `aal2` | no |
+| `passkey` (user verification is always required) | `aal2` | yes |
+| `password` + `remembered-device` (only if the host enables `rememberedDevice.days`) | `aal2` | no |
+
+Reporting a level describes the session. It is not a claim that the application conforms to NIST SP 800-63-4.
+
 ### `AuthenticationRequirement`
 
 What a protected operation may require of the current session:
@@ -61,6 +72,8 @@ Enumeration resistance is part of the contract. `invalid-credentials` covers unk
 
 `AuthenticationEvent` values are emitted after security-relevant facts (`AUTHENTICATION_EVENT_TYPES`, all namespaced `authentication.*`).
 
+Phase 3 adds `authentication.backup-code-used`. Sign-in failures carry a machine-readable `reason`, such as `invalid-credentials`, `account-locked`, `rate-limited`, `totp-replayed` or `user-not-verified`.
+
 Events MUST NOT contain credentials, one-time codes, tokens, session secrets or email addresses. `client.ipAddress` and `client.userAgent` are personal data. The sink owner is responsible for their retention.
 
 Delivery is best effort. A failing sink is reported, but it never changes the outcome of the operation.
@@ -82,6 +95,7 @@ Delivery is best effort. A failing sink is reported, but it never changes the ou
 | `reauthentication.maxAgeSeconds` | 900 | 60–3 600 |
 | `mfa` | `required` | `required` or `optional` |
 | `emailVerification` | `required` | `required` or `optional` |
+| `rememberedDevice.days` | 0 (off) | 0–30. Days a device may skip the second factor after the user opts in. |
 
 The defaults follow ASVS 5.0 Level 2 and NIST SP 800-63-4 AAL2 guidance. A host that loosens a default MUST record the gap and its risk treatment (Security Architecture §12).
 
@@ -107,7 +121,8 @@ These are auto-imported into the host's server code:
 | Function | Behaviour |
 |---|---|
 | `getAuthenticatedPrincipal(event)` | The current `AuthenticatedPrincipal`, or `null`. Resolved once per request. |
-| `requireAuthenticatedPrincipal(event, requirement?)` | The principal, or throws `unauthenticated` (401), `insufficient-assurance` (403) or `reauthentication-required` (401). |
+| `requireAuthenticatedPrincipal(event, requirement?)` | The principal, or throws `unauthenticated` (401), `insufficient-assurance` (403) or `reauthentication-required` (401). `minimumLevel` **defaults to the policy's required level**: `aal2` while `mfa: 'required'` (the default). Pass `{ minimumLevel: 'aal1' }` to accept sessions that have not completed a second factor. |
+| `requiredAssuranceLevel()` | `'aal2'` when the policy requires MFA, otherwise `'aal1'`. |
 | `migrateAuthenticationDatabase()` | Applies pending migrations to the capability schema. Requests wait for it to finish. |
 
 Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
@@ -119,9 +134,9 @@ All endpoints live under `/api/authentication`. Every state-changing request mus
 | Method and path | Body | Success | Notes |
 |---|---|---|---|
 | `POST /sign-up` | `{ email, password }` | 202 `{ status: 'accepted' }` | Identical for new and existing addresses. A verification email is sent to new addresses. |
-| `POST /sign-in` | `{ email, password }` | 200 `{ status: 'signed-in' }` | Sets the session cookie and replaces any previous session. |
+| `POST /sign-in` | `{ email, password }` | 200 `{ status: 'signed-in' }` or `{ status: 'second-factor-required', methods: ['totp', 'backup-code'] }` | Signed in: sets the session cookie and replaces any previous session. Second factor required: no session yet, only a 5-minute interim cookie. |
 | `POST /sign-out` | none | 200 `{ status: 'signed-out' }` | Revokes the session server-side. Always succeeds. |
-| `GET /session` | | 200 `{ principal }` | `principal` is `null` when signed out. `Cache-Control: no-store`. |
+| `GET /session` | | 200 `{ principal, requiredLevel }` | `principal` is `null` when signed out. A principal below `requiredLevel` must enrol or step up. `Cache-Control: no-store`. |
 | `GET /verify-email?token=` | | 303 redirect | To `routes.signIn` with `?verification=success` or `?verification=failed`. |
 | `POST /password/forgot` | `{ email }` | 202 `{ status: 'accepted' }` | Identical for unknown addresses. At most 3 emails per address per throttle window. |
 | `POST /password/reset` | `{ token, password }` | 200 `{ status: 'password-reset' }` | Single-use token, valid for 30 minutes. Revokes every session. |
@@ -129,6 +144,31 @@ All endpoints live under `/api/authentication`. Every state-changing request mus
 | `GET /sessions` | | 200 `{ sessions }` | The principal's own `AuthenticationSessionSummary[]`, newest first. |
 | `DELETE /sessions/:id` | | 204 | Revokes one of the principal's own sessions. Another principal's id answers `validation-failed`. |
 | `POST /sessions/revoke-others` | none | 200 `{ status: 'revoked' }` | Revokes every session except the current one. |
+
+### Multi-factor and step-up endpoints
+
+Access levels:
+- **Enrolment**: any session, `aal1` included, authenticated within `reauthentication.maxAgeSeconds`.
+- **Step-up**: any session.
+- **Standard**: the policy's required level.
+- **Sensitive**: the required level, plus authentication within `reauthentication.maxAgeSeconds`.
+
+| Method and path | Access | Body | Success | Notes |
+|---|---|---|---|---|
+| `POST /mfa/verify` | interim cookie | `{ method: 'totp' \| 'backup-code', code, rememberDevice? }` | 200 `{ status: 'signed-in' }` | Completes a `second-factor-required` sign-in (aal2). TOTP codes are single-use per time step. Repeated failures lock the second factor (`rate-limited`). |
+| `GET /mfa` | step-up | | 200 `{ requiredLevel, totp: { enabled }, backupCodes: { remaining }, passkeys: [{ id, name, createdAt }] }` | |
+| `POST /mfa/totp/enrol` | enrolment | `{ password }` | 200 `{ totpUri, backupCodes }` | Backup codes are shown once. TOTP is inactive until confirmed. |
+| `POST /mfa/totp/confirm` | enrolment | `{ code }` | 200 `{ status: 'totp-enabled' }` | Rotates the session, which then counts `totp` (aal2 with a password). |
+| `POST /mfa/totp/disable` | sensitive | `{ password }` | 200 `{ status: 'totp-disabled' }` | Removes TOTP and the backup codes. |
+| `POST /mfa/backup-codes` | sensitive | `{ password }` | 200 `{ backupCodes }` | Replaces every code. |
+| `POST /passkeys/registration-options` | enrolment | none | 200 WebAuthn creation options | |
+| `POST /passkeys/registration` | enrolment | `{ response, name? }` | 200 `{ status: 'passkey-registered' }` | Authenticators that do not verify the user answer `insufficient-assurance`. |
+| `POST /passkeys/authentication-options` | none | none | 200 WebAuthn request options | |
+| `POST /passkeys/authentication` | none | `{ response }` | 200 `{ status: 'signed-in' }` | Passwordless sign-in or step-up. Creates a new aal2, phishing-resistant session and replaces the current one. |
+| `DELETE /passkeys/:id` | sensitive | | 204 | Only the principal's own passkeys. |
+| `POST /reauthenticate` | step-up | `{ method: 'password', password }` or `{ method: 'totp', code }` | 200 `{ status: 'reauthenticated' }` | Refreshes `authenticatedAt`. A TOTP code also adds the factor (aal1 to aal2). |
+
+`POST /password/change` is now **sensitive**: it requires the required level and a recent authentication.
 
 ## 9. Client surface
 
@@ -140,11 +180,13 @@ All endpoints live under `/api/authentication`. Every state-changing request mus
 | `isAuthenticated` | Computed boolean. |
 | `ready` | True once the session has loaded. A layer plugin loads it before the first navigation. |
 | `refresh()` | Reloads the session from the server. |
-| `signUp`, `signIn`, `signOut`, `requestPasswordReset`, `resetPassword`, `changePassword`, `listSessions`, `revokeSession`, `revokeOtherSessions` | Each resolves to `AuthenticationResult<T>`: `{ ok: true, data }` or `{ ok: false, code }`. |
+| `requiredLevel` | The policy's required assurance level. |
+| `needsSecondFactor` | True when signed in below `requiredLevel`. |
+| `signUp`, `signIn`, `verifySecondFactor`, `signInWithPasskey`, `reauthenticate`, `signOut`, `requestPasswordReset`, `resetPassword`, `changePassword`, `mfaStatus`, `enrolTotp`, `confirmTotp`, `disableTotp`, `regenerateBackupCodes`, `registerPasskey`, `removePasskey`, `listSessions`, `revokeSession`, `revokeOtherSessions` | Each resolves to `AuthenticationResult<T>`: `{ ok: true, data }` or `{ ok: false, code }`. `signIn` may return `{ status: 'second-factor-required' }`. Passkey ceremonies use `@simplewebauthn/browser`, and a cancelled ceremony answers `validation-failed`. |
 
 Named route middleware:
 
-- `authenticated` sends anonymous visitors to `routes.signIn?redirect=<path>`.
+- `authenticated` sends anonymous visitors to `routes.signIn?redirect=<path>`, and sessions below the required level to `routes.mfa?redirect=<path>`.
 - `guest` sends signed-in visitors to the `redirect` query, but only same-origin paths are accepted. Otherwise they go to `routes.afterSignIn`.
 
 Client state and middleware improve the user experience. They are not security enforcement.
@@ -159,5 +201,6 @@ These are public runtime config values under `authentication.routes`, and hosts 
 | `afterSignIn` | `/` | `guest` middleware fallback |
 | `afterSignOut` | `/` | Reserved for the default pages (phase 5) |
 | `resetPassword` | `/reset-password` | Path in password-reset emails (`?token=`) |
+| `mfa` | `/mfa` | `authenticated` middleware target for enrolment or step-up |
 
-`authentication.locale` (default `en-GB`) is passed to the mailer with every message.
+`authentication.locale` (default `en-GB`) is passed to the mailer with every message. `authentication.appName` (default: the base URL's host) is shown in authenticator apps and passkey prompts.

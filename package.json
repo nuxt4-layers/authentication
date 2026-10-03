@@ -1,6 +1,6 @@
 {
   "name": "@nuxt4-layers/authentication",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Nuxt 4 foundation capability that establishes who has signed in and manages the secure lifecycle of the authenticated session.",
@@ -33,6 +33,9 @@
     "check": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
+    "@better-auth/passkey": "^1.7.7",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.3",
     "better-auth": "^1.7.7",
     "h3": "^1.15.11",
     "kysely": "^0.29.6",

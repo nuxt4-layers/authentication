@@ -10,6 +10,8 @@
  * - `backup-code` — single-use recovery code.
  * - `passkey` — WebAuthn/FIDO2 credential (phishing resistant).
  * - `federated` — external identity provider sign-in.
+ * - `remembered-device` — the second factor was skipped on a device the user
+ *   chose to remember (only when the host enables `rememberedDevice.days`).
  */
 export type AuthenticationMethod =
   | 'password'
@@ -17,6 +19,7 @@ export type AuthenticationMethod =
   | 'backup-code'
   | 'passkey'
   | 'federated'
+  | 'remembered-device'
 
 /**
  * Authentication assurance level, aligned with NIST SP 800-63-4 terminology.
