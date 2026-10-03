@@ -17,6 +17,16 @@ export default defineNuxtConfig({
       // NUXT_AUTHENTICATION_TRUST_PROXY: read the client IP from X-Forwarded-For.
       // Enable only behind a proxy that overwrites that header.
       trustProxy: false,
+      // Identity providers. Each is enabled only when its client ID and secret are set,
+      // e.g. NUXT_AUTHENTICATION_PROVIDERS_GOOGLE_CLIENT_ID / _CLIENT_SECRET.
+      // Register <base URL>/api/authentication/federation/callback/<id> with the provider.
+      providers: {
+        google: { clientId: '', clientSecret: '' },
+        microsoft: { clientId: '', clientSecret: '', tenantId: 'common' },
+        github: { clientId: '', clientSecret: '' },
+        facebook: { clientId: '', clientSecret: '' },
+        oidc: { name: '', discoveryUrl: '', clientId: '', clientSecret: '' },
+      },
     },
     public: {
       authentication: {

@@ -8,6 +8,7 @@ import type {
 } from '../../contracts'
 import { createHibpCheck, noCompromisedPasswordCheck, type CompromisedPasswordCheck } from './compromised-password'
 import { buildEngineOptions } from './engine-options'
+import type { EnabledProvider } from './federation-config'
 import { accountKey, createSignInThrottle, type SignInThrottle } from './throttle'
 
 /**
@@ -32,6 +33,8 @@ export interface AuthenticationRuntimeInput {
   locale: string
   /** Shown in authenticator apps and passkey prompts. Defaults to the base URL's host. */
   appName?: string
+  /** Enabled identity providers (see federation-config). */
+  providers?: readonly EnabledProvider[]
   routes: AuthenticationRoutes
   production: boolean
   fetch?: typeof fetch
@@ -47,6 +50,7 @@ export interface AuthenticationRuntime {
   isCompromisedPassword: CompromisedPasswordCheck
   baseUrl: string
   routes: AuthenticationRoutes
+  providers: readonly EnabledProvider[]
   /** Sends a security notification; failures are logged, never thrown. */
   notify(to: string, eventType: AuthenticationEvent['type']): Promise<void>
   emit: (event: AuthenticationEvent) => Promise<void>
@@ -114,6 +118,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     secret: input.secret,
     baseUrl: origin,
     appName: input.appName || url.hostname,
+    providers: input.providers ?? [],
     policy,
     hooks: {
       async sendVerificationEmail({ email, token }) {
@@ -146,6 +151,17 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
       async onEmailVerified({ userId }) {
         await emit(systemEvent('authentication.email-verified', userId))
       },
+      async onIdentityLinked({ userId, providerId }) {
+        await emit(systemEvent('authentication.federated-identity-linked', userId, { method: 'federated', reason: providerId }))
+        const context = await engine.$context
+        const user = await context.internalAdapter.findUserById(userId)
+        const accounts = await context.internalAdapter.findAccounts(userId)
+        // A new sign-in method on an existing account is security relevant; an
+        // account created by this very sign-in (its only method) needs no notice.
+        if (user && accounts.length > 1) {
+          await notify(user.email, 'authentication.federated-identity-linked')
+        }
+      },
     },
   }))
 
@@ -160,6 +176,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
       : noCompromisedPasswordCheck,
     baseUrl: origin,
     routes,
+    providers: input.providers ?? [],
     notify,
     emit,
   }

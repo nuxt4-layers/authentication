@@ -10,6 +10,7 @@ import {
 } from '../utils/authentication-composition'
 import { authenticationError, forwardCookies, requestHeaders } from './http'
 import { absoluteExpiry, toPrincipal, type EngineSessionRecord } from './principal'
+import { enabledProviders } from './federation-config'
 import { createAuthenticationRuntime, type AuthenticationRuntime } from './runtime'
 
 /** PRIVATE. Binds the pure runtime to Nitro: runtime config, ports and per-request caching. */
@@ -43,6 +44,7 @@ export async function useAuthenticationRuntime(): Promise<AuthenticationRuntime>
     baseUrl: config.authentication.baseUrl,
     locale: config.public.authentication.locale,
     appName: config.public.authentication.appName,
+    providers: enabledProviders(config.authentication.providers),
     routes: config.public.authentication.routes,
     production: !import.meta.dev,
   })

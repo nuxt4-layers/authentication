@@ -76,6 +76,7 @@ describe('principal and assurance', () => {
     [['passkey'], 'aal2'],
     [['totp'], 'aal1'],
     [['federated'], 'aal1'],
+    [['federated', 'passkey'], 'aal2'],
   ] as const)('rates %j as %s', (methods, level) => {
     expect(assuranceLevel(methods)).toBe(level)
   })
@@ -189,6 +190,11 @@ describe('engine security configuration', () => {
     expect(ids).toEqual(['two-factor', 'passkey'])
   })
 
+  it('never links accounts implicitly and keeps no provider tokens', () => {
+    expect(options.account.accountLinking).toMatchObject({ disableImplicitLinking: true, allowUnlinkingAll: false })
+    expect(options.account.updateAccountOnSignIn).toBe(false)
+  })
+
   it('applies the policy: verification, lengths, idle timeout, reset revocation', () => {
     expect(options.emailAndPassword).toMatchObject({
       requireEmailVerification: true,
@@ -271,5 +277,63 @@ describe('multi-factor internals', async () => {
     expect(assertionUserVerified(authenticator.authenticate({ challenge: 'c' }, { userVerified: false }))).toBe(false)
     expect(assertionUserVerified({ response: { authenticatorData: '!!' } })).toBe(false)
     expect(registrationUserVerified(null)).toBe(false)
+  })
+})
+
+describe('federation internals', async () => {
+  const { federationOutcome } = await import('../server/internal/federation')
+  const { enabledProviders, federationCallbackUrl } = await import('../server/internal/federation-config')
+  const { withoutProviderTokens } = await import('../server/internal/engine-options')
+
+  it.each([
+    ['access_denied', 'cancelled'],
+    ['account_not_linked', 'link-required'],
+    ['unable_to_create_user', 'link-required'],
+    ['email_not_verified', 'link-required'],
+    ['account_already_linked_to_different_user', 'link-failed'],
+    ['state_mismatch', 'failed'],
+    ['anything_else', 'failed'],
+  ])('maps %s to %s', (engineError, outcome) => {
+    expect(federationOutcome(engineError)).toBe(outcome)
+  })
+
+  it('answers identically whether an email has an account or is merely unverified (no enumeration)', () => {
+    expect(federationOutcome('account_not_linked')).toBe(federationOutcome('unable_to_create_user'))
+  })
+
+  it('enables a provider only when both client ID and secret are set', () => {
+    expect(enabledProviders({
+      google: { clientId: 'id', clientSecret: 'secret' },
+      github: { clientId: 'id', clientSecret: '' },
+      facebook: { clientId: '', clientSecret: 'secret' },
+      microsoft: { clientId: 'id', clientSecret: 'secret' },
+    }).map(provider => [provider.id, provider.name, provider.tenantId])).toEqual([
+      ['google', 'Google', undefined],
+      ['microsoft', 'Microsoft', undefined],
+    ])
+    expect(enabledProviders(undefined)).toEqual([])
+  })
+
+  it('requires a discovery URL for the OIDC provider and uses its configured name', () => {
+    expect(() => enabledProviders({ oidc: { clientId: 'id', clientSecret: 'secret' } })).toThrow(/DISCOVERY_URL/)
+    expect(enabledProviders({ oidc: { name: 'Company SSO', discoveryUrl: 'https://idp.example/.well-known/openid-configuration', clientId: 'id', clientSecret: 'secret' } })[0])
+      .toMatchObject({ id: 'oidc', name: 'Company SSO' })
+  })
+
+  it('builds the callback URL to register with each provider', () => {
+    expect(federationCallbackUrl('https://example.com', 'github')).toBe('https://example.com/api/authentication/federation/callback/github')
+  })
+
+  it('discards provider tokens but leaves credential accounts alone', () => {
+    expect(withoutProviderTokens({ providerId: 'oidc', accountId: 'sub', accessToken: 'a', refreshToken: 'r', idToken: 'i', accessTokenExpiresAt: new Date() }))
+      .toEqual({ providerId: 'oidc', accountId: 'sub', accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null })
+    const credential = { providerId: 'credential', password: 'hash' }
+    expect(withoutProviderTokens(credential)).toBe(credential)
+  })
+
+  it('rates a provider sign-in as aal1 and a provider plus local factor as aal2', () => {
+    expect(assuranceLevel(['federated'])).toBe('aal1')
+    expect(assuranceLevel(['federated', 'totp'])).toBe('aal2')
+    expect(assuranceLevel(['federated', 'remembered-device'])).toBe('aal2')
   })
 })

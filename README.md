@@ -4,7 +4,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.3.0, phase 3 (multi-factor).** Email and password, verification, reset, sessions, lockout and throttling, plus TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication all work end to end on PostgreSQL. **MFA is required by default.** Federation and default pages follow; see [docs/roadmap.md](docs/roadmap.md).
+> **Status: 0.4.0, phase 4 (federation).** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; and sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject) all work end to end on PostgreSQL. **MFA is required by default.** Default pages follow; see [docs/roadmap.md](docs/roadmap.md).
 
 ## Bounded responsibility
 
@@ -103,6 +103,7 @@ See [docs/composition-contract.md](docs/composition-contract.md) for the full co
 | `authentication.trustProxy` | `NUXT_AUTHENTICATION_TRUST_PROXY` | Read client IPs from `X-Forwarded-For`. Enable only behind a proxy that overwrites it. |
 | `public.authentication.routes` | `NUXT_PUBLIC_AUTHENTICATION_ROUTES_*` | Sign-in, after-sign-in, after-sign-out, reset-password and MFA (enrol / step-up) paths. |
 | `public.authentication.locale` | `NUXT_PUBLIC_AUTHENTICATION_LOCALE` | Locale passed to the mailer (default `en-GB`). |
+| `authentication.providers.<id>.clientId` / `clientSecret` | `NUXT_AUTHENTICATION_PROVIDERS_<ID>_CLIENT_ID` / `_CLIENT_SECRET` | Enables `google`, `microsoft` (`_TENANT_ID`), `github`, `facebook`, or `oidc` (`_DISCOVERY_URL`, `_NAME`). Register `<base URL>/api/authentication/federation/callback/<id>` with the provider. |
 | `public.authentication.appName` | `NUXT_PUBLIC_AUTHENTICATION_APP_NAME` | Name in authenticator apps and passkey prompts (default: base URL host). |
 
 Secrets come from deployment secret management and are never committed.

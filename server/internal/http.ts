@@ -42,6 +42,10 @@ const ENGINE_ERROR_CODES: Record<string, AuthenticationErrorCode> = {
   FAILED_TO_VERIFY_REGISTRATION: 'validation-failed',
   PREVIOUSLY_REGISTERED: 'validation-failed',
   YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY: 'validation-failed',
+  // Accounts and federation
+  FAILED_TO_UNLINK_LAST_ACCOUNT: 'validation-failed',
+  ACCOUNT_NOT_FOUND: 'validation-failed',
+  PROVIDER_NOT_FOUND: 'validation-failed',
 }
 
 export function engineErrorCode(error: unknown): AuthenticationErrorCode {
