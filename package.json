@@ -1,0 +1,52 @@
+{
+  "name": "@nuxt4-layers/authentication",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nuxt 4 foundation capability that establishes who has signed in and manages the secure lifecycle of the authenticated session.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nuxt4-layers/authentication"
+  },
+  "exports": {
+    ".": "./nuxt.config.ts",
+    "./contracts": "./contracts/index.ts",
+    "./capability": "./capability.json"
+  },
+  "files": [
+    "app",
+    "server",
+    "shared",
+    "contracts",
+    "capability.json",
+    "nuxt.config.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepare": "nuxt prepare",
+    "dev": "nuxt dev playground",
+    "build:playground": "nuxt build playground",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "nuxt": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "nuxt": "^4.5.2",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3",
+    "vue-tsc": "^3.3.11"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1",
+  "name": "@nuxt4-layers/authentication",
+  "version": "0.1.0",
+  "classification": "foundation",
+  "provides": [
+    {
+      "capability": "Authentication",
+      "contractVersion": "1"
+    }
+  ],
+  "requires": [],
+  "publicExports": [
+    ".",
+    "./contracts",
+    "./capability"
+  ],
+  "ports": [
+    { "port": "AuthenticationDatabase", "optional": false },
+    { "port": "AuthenticationMailer", "optional": false },
+    { "port": "AuthenticationEventSink", "optional": true },
+    { "port": "AuthenticationPolicy", "optional": true }
+  ],
+  "integration": {
+    "consumers": "consume the AuthenticatedPrincipal contract; do not import authentication internals or engine types",
+    "composition": "host supplies ports from a Nitro plugin; persistence follows ADR-0002; authentication is tenant-agnostic"
+  }
+}
