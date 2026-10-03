@@ -23,7 +23,8 @@ export async function readBodyAs<T>(event: H3Event, schema: z.ZodType<T>): Promi
   }
 }
 
-export const passwordOnlyBody = z.object({ password: passwordSchema }).strict()
+/** The engine still requires the password from accounts that have one; accounts created through a provider have none. */
+export const passwordOnlyBody = z.object({ password: passwordSchema.optional() }).strict()
 export const totpCodeBody = z.object({ code: z.string().regex(/^\d{6}$/) }).strict()
 export const secondFactorBody = z.object({
   method: z.enum(['totp', 'backup-code']),

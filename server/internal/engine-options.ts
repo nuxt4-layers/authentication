@@ -1,9 +1,10 @@
 import { createHmac } from 'node:crypto'
 import { passkey } from '@better-auth/passkey'
 import type { BetterAuthOptions } from 'better-auth'
-import { twoFactor } from 'better-auth/plugins'
+import { genericOAuth, twoFactor } from 'better-auth/plugins'
 import { PostgresDialect } from 'kysely'
 import type { AuthenticationPolicy, PostgresPoolLike } from '../../contracts'
+import { federationCallbackUrl, type EnabledProvider } from './federation-config'
 
 /**
  * PRIVATE. Builds the authentication engine's options from validated layer
@@ -16,6 +17,7 @@ export interface EngineHooks {
   onPasswordReset(input: { userId: string, email: string }): Promise<void>
   onAccountRegistered(input: { userId: string }): Promise<void>
   onEmailVerified(input: { userId: string }): Promise<void>
+  onIdentityLinked(input: { userId: string, providerId: string }): Promise<void>
 }
 
 export interface EngineConfig {
@@ -26,6 +28,8 @@ export interface EngineConfig {
   policy: AuthenticationPolicy
   /** Name shown in authenticator apps and passkey prompts. */
   appName: string
+  /** Enabled identity providers; empty disables federation. */
+  providers?: readonly EnabledProvider[]
   hooks?: EngineHooks
 }
 
@@ -53,8 +57,34 @@ function backupCodeStorage(secret: string) {
 /** Engine routes are never mounted; the layer calls the engine server-side only. */
 export const ENGINE_BASE_PATH = '/api/authentication/__engine'
 
+/** Removes provider-issued tokens from an account record; credential accounts are untouched. */
+export function withoutProviderTokens<T extends { providerId?: string }>(account: T): T {
+  if (account.providerId === 'credential') return account
+  const stripped: Record<string, unknown> = { ...account }
+  for (const field of ['accessToken', 'refreshToken', 'idToken', 'accessTokenExpiresAt', 'refreshTokenExpiresAt']) {
+    if (field in stripped) stripped[field] = null
+  }
+  return stripped as T
+}
+
+/** Built-in social providers, keyed as the engine expects. */
+function socialProviders(origin: string, providers: readonly EnabledProvider[]) {
+  const result: Record<string, Record<string, unknown>> = {}
+  for (const provider of providers) {
+    const common = { clientId: provider.clientId, clientSecret: provider.clientSecret, redirectURI: federationCallbackUrl(origin, provider.id) }
+    if (provider.id === 'google') result.google = { ...common, prompt: 'select_account' }
+    if (provider.id === 'github') result.github = common
+    if (provider.id === 'facebook') result.facebook = common
+    if (provider.id === 'microsoft') result.microsoft = { ...common, tenantId: provider.tenantId ?? 'common' }
+  }
+  return result
+}
+
 export function buildEngineOptions(config: EngineConfig) {
   const { policy } = config
+  const origin = new URL(config.baseUrl).origin
+  const providers = config.providers ?? []
+  const oidc = providers.find(provider => provider.id === 'oidc')
   return {
     appName: config.appName,
     secret: config.secret,
@@ -113,9 +143,25 @@ export function buildEngineOptions(config: EngineConfig) {
       },
     },
     rateLimit: { enabled: false },
+    socialProviders: socialProviders(origin, providers),
+    account: {
+      // Provider tokens are discarded (see databaseHooks.account); encryption is a second line of defence.
+      encryptOAuthTokens: true,
+      updateAccountOnSignIn: false,
+      accountLinking: {
+        // Explicit linking while signed in only: never link by matching email.
+        enabled: true,
+        disableImplicitLinking: true,
+        allowDifferentEmails: true,
+        updateUserInfoOnLink: false,
+        allowUnlinkingAll: false,
+      },
+    },
     plugins: [
       twoFactor({
         issuer: config.appName,
+        // Accounts created through a provider have no password to confirm with.
+        allowPasswordless: true,
         skipVerificationOnEnable: false,
         // Short-lived interim state between the password and the second factor.
         twoFactorCookieMaxAge: 5 * 60,
@@ -133,6 +179,20 @@ export function buildEngineOptions(config: EngineConfig) {
           storeBackupCodes: backupCodeStorage(config.secret),
         },
       }),
+      ...(oidc
+        ? [genericOAuth({
+            config: [{
+              providerId: 'oidc',
+              discoveryUrl: oidc.discoveryUrl!,
+              clientId: oidc.clientId,
+              clientSecret: oidc.clientSecret,
+              scopes: ['openid', 'email', 'profile'],
+              pkce: true,
+              requireIdTokenVerification: true,
+              redirectURI: federationCallbackUrl(origin, 'oidc'),
+            }],
+          })]
+        : []),
       passkey({
         rpID: new URL(config.baseUrl).hostname,
         rpName: config.appName,
@@ -153,9 +213,29 @@ export function buildEngineOptions(config: EngineConfig) {
     databaseHooks: {
       user: {
         create: {
+          // Provider sign-up only with an email the provider has verified.
+          before: async (user, context) => {
+            if (context?.path?.startsWith('/callback/') && !user.emailVerified) return false
+            return { data: user }
+          },
           after: async (user) => {
             await config.hooks?.onAccountRegistered({ userId: user.id })
           },
+        },
+      },
+      account: {
+        // Data minimisation: the layer needs only the provider's identity, never
+        // its tokens. The engine would otherwise keep ID tokens in plain text.
+        create: {
+          before: async account => ({ data: withoutProviderTokens(account) }),
+          after: async (account) => {
+            if (account.providerId !== 'credential') {
+              await config.hooks?.onIdentityLinked({ userId: account.userId, providerId: account.providerId })
+            }
+          },
+        },
+        update: {
+          before: async account => ({ data: withoutProviderTokens(account) }),
         },
       },
       session: {

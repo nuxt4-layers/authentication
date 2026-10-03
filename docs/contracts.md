@@ -35,6 +35,10 @@ How `assurance` is derived:
 | `password` + `totp`, or `password` + `backup-code` | `aal2` | no |
 | `passkey` (user verification is always required) | `aal2` | yes |
 | `password` + `remembered-device` (only if the host enables `rememberedDevice.days`) | `aal2` | no |
+| `federated` (identity provider) | `aal1` | no |
+| `federated` + `totp`, `backup-code` or `passkey` | `aal2` | no, or yes with a passkey |
+
+A provider's own MFA is not trusted. Provider sign-ins step up with a local factor.
 
 Reporting a level describes the session. It is not a claim that the application conforms to NIST SP 800-63-4.
 
@@ -170,6 +174,25 @@ Access levels:
 
 `POST /password/change` is now **sensitive**: it requires the required level and a recent authentication.
 
+### Federation endpoints
+
+Providers: `google`, `microsoft`, `github`, `facebook` and one generic `oidc` provider. Each is enabled only when configured.
+
+| Method and path | Access | Body | Success | Notes |
+|---|---|---|---|---|
+| `GET /federation/providers` | none | | 200 `{ providers: [{ id, name }] }` | |
+| `GET /federation/:provider/start?redirect=` | none | | 302 to the provider | State, PKCE and nonce are bound to the browser by a short-lived cookie. |
+| `GET /federation/callback/:provider` | none | | 302 | Registered with the provider as its redirect URI. On success, goes to `redirect`. On failure, goes back to where the flow began with `?federation=<outcome>`. |
+| `POST /federation/:provider/link` | sensitive | `{ redirect? }` | 200 `{ url }` | The browser visits `url`. The provider is linked to the signed-in account. |
+| `GET /federation/accounts` | step-up | | 200 `{ password, providers: [{ provider, linkedAt }] }` | |
+| `DELETE /federation/:provider` | sensitive | | 204 | The last way of signing in cannot be removed (`validation-failed`). |
+
+Federation rules:
+- **Never linked by email.** A provider identity whose email matches an existing account is refused. The user signs in and links it explicitly.
+- **New accounts** are created only when the provider reports the email as verified, and are then marked verified. Facebook never reports verification, so Facebook identities can only be linked.
+- **Outcomes** are deliberately coarse: `cancelled`, `link-required` (any reason the identity cannot sign in on its own, whether or not an account exists), `link-failed` (the identity belongs to another account) and `failed`.
+- **Provider tokens are discarded.** The layer keeps only the provider's subject identifier.
+
 ## 9. Client surface
 
 `useAuthentication()` is auto-imported in the host's app. It returns:
@@ -182,6 +205,7 @@ Access levels:
 | `refresh()` | Reloads the session from the server. |
 | `requiredLevel` | The policy's required assurance level. |
 | `needsSecondFactor` | True when signed in below `requiredLevel`. |
+| `federationProviders`, `linkedAccounts`, `linkProvider`, `unlinkProvider` | Federation, as `AuthenticationResult<T>`. `signInWithProvider(provider, redirect?)` navigates to the provider. `linkProvider` navigates on success. |
 | `signUp`, `signIn`, `verifySecondFactor`, `signInWithPasskey`, `reauthenticate`, `signOut`, `requestPasswordReset`, `resetPassword`, `changePassword`, `mfaStatus`, `enrolTotp`, `confirmTotp`, `disableTotp`, `regenerateBackupCodes`, `registerPasskey`, `removePasskey`, `listSessions`, `revokeSession`, `revokeOtherSessions` | Each resolves to `AuthenticationResult<T>`: `{ ok: true, data }` or `{ ok: false, code }`. `signIn` may return `{ status: 'second-factor-required' }`. Passkey ceremonies use `@simplewebauthn/browser`, and a cancelled ceremony answers `validation-failed`. |
 
 Named route middleware:

@@ -102,7 +102,12 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | T11 Step-up: sensitive operations need authentication within 15 minutes; re-authenticate by password, TOTP or passkey | Implemented (phase 3) | `tests/integration/api.test.ts`, `tests/integration/mfa.test.ts` |
 | Remembered devices off by default (policy `rememberedDevice.days: 0`) | Implemented (phase 3) | `tests/integration/mfa.test.ts`, `tests/policy.test.ts` |
 | Notifications for MFA enrolment and removal, backup-code use and regeneration | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
-| T10 Federated account linking | Planned | Phase 4 |
+| T10 No implicit linking by email; explicit linking only while signed in with a recent, strong session | Implemented (phase 4) | `tests/integration/federation.test.ts` |
+| T10 Accounts created only for provider-verified emails; uniform outcomes reveal no account existence | Implemented (phase 4) | `tests/integration/federation.test.ts`, `tests/internals.test.ts` |
+| T10 State, PKCE and nonce; forged or replayed callbacks refused; previous session revoked | Implemented (phase 4) | `tests/integration/federation.test.ts` |
+| T10 Identity already linked elsewhere cannot be relinked; last sign-in method cannot be unlinked | Implemented (phase 4) | `tests/integration/federation.test.ts` |
+| Provider tokens discarded (the engine would keep OIDC ID tokens in plain text) | Implemented (phase 4) | `tests/integration/federation.test.ts` |
+| Provider MFA not trusted: provider sign-ins are aal1 and step up locally | Implemented (phase 4) | `tests/integration/federation.test.ts` |
 
 ### ASVS 5.0 mapping (by section)
 
@@ -127,4 +132,6 @@ This maps controls to OWASP ASVS 5.0 chapters and sections. Requirement-level id
 | Per-client throttling relies on correct `trustProxy` configuration | Behind a proxy without `trustProxy`, all clients share one address and hit the limit together; with `trustProxy` but no overwriting proxy, attackers can spoof addresses | Documented in the composition contract. The per-account lockout is unaffected. |
 | ASVS mapping is by section, not yet by requirement identifier | Evidence is not yet traceable to individual requirements | Open action: verify identifiers against the official ASVS 5.0.0 text and add them to the register. |
 | Remembered devices, when a host enables them, let a stolen device cookie skip the second factor | Second-factor bypass on that device for up to `days` | Off by default. A host that enables it must record the risk. |
+| Facebook never reports email verification | Facebook identities cannot create accounts, only be linked | By design. Documented for hosts. |
+| Only one generic OIDC provider per deployment | Several enterprise IdPs need separate deployments | Revisit when a host needs more than one. |
 | Passkeys need a registrable domain as the relying-party ID | IP-address origins cannot use passkeys in browsers | Production base URLs use a domain. Tests use a software authenticator. |

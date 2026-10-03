@@ -1,5 +1,5 @@
 import { computed, readonly } from 'vue'
-import { useRequestFetch, useState } from '#imports'
+import { navigateTo, useRequestFetch, useState } from '#imports'
 import type {
   AuthenticatedPrincipal,
   AuthenticationAssuranceLevel,
@@ -21,6 +21,8 @@ export interface MfaStatus {
   backupCodes: { remaining: number }
   passkeys: { id: string, name: string | null, createdAt: string | null }[]
 }
+
+export interface FederationProvider { id: string, name: string }
 
 export type SignInOutcome =
   | { status: 'signed-in' }
@@ -123,7 +125,8 @@ export function useAuthentication() {
     mfaStatus: () => call<MfaStatus>('/mfa', undefined, 'GET'),
 
     /** Starts TOTP enrolment: returns the provisioning URI and one-time-visible backup codes. */
-    enrolTotp: (password: string) =>
+    /** Password is required only for accounts that have one. */
+    enrolTotp: (password?: string) =>
       call<{ totpUri: string, backupCodes: string[] }>('/mfa/totp/enrol', { password }),
 
     async confirmTotp(code: string) {
@@ -132,13 +135,13 @@ export function useAuthentication() {
       return result
     },
 
-    async disableTotp(password: string) {
+    async disableTotp(password?: string) {
       const result = await call<{ status: 'totp-disabled' }>('/mfa/totp/disable', { password })
       if (result.ok) await refresh()
       return result
     },
 
-    regenerateBackupCodes: (password: string) =>
+    regenerateBackupCodes: (password?: string) =>
       call<{ backupCodes: string[] }>('/mfa/backup-codes', { password }),
 
     /** Registers a passkey on this device for the signed-in account. */
@@ -152,6 +155,31 @@ export function useAuthentication() {
       if (!attestation.ok) return attestation
       return call<{ status: 'passkey-registered' }>('/passkeys/registration', { response: attestation.data as never, ...(name ? { name } : {}) })
     },
+
+    /** Identity providers the deployment has enabled. */
+    async federationProviders(): Promise<AuthenticationResult<FederationProvider[]>> {
+      const result = await call<{ providers: FederationProvider[] }>('/federation/providers', undefined, 'GET')
+      return result.ok ? { ok: true, data: result.data.providers } : result
+    },
+
+    /** Navigates to the provider. On failure the browser returns with `?federation=<outcome>`. */
+    signInWithProvider(provider: string, redirect?: string) {
+      const query = redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''
+      return navigateTo(`${BASE}/federation/${encodeURIComponent(provider)}/start${query}`, { external: true })
+    },
+
+    linkedAccounts: () =>
+      call<{ password: boolean, providers: { provider: string, linkedAt: string }[] }>('/federation/accounts', undefined, 'GET'),
+
+    /** Links a provider to the signed-in account (needs a recent authentication), then navigates to it. */
+    async linkProvider(provider: string, redirect?: string) {
+      const result = await call<{ url: string }>(`/federation/${encodeURIComponent(provider)}/link`, redirect ? { redirect } : {})
+      if (result.ok) await navigateTo(result.data.url, { external: true })
+      return result
+    },
+
+    unlinkProvider: (provider: string) =>
+      call<null>(`/federation/${encodeURIComponent(provider)}`, undefined, 'DELETE'),
 
     removePasskey: (id: string) =>
       call<null>(`/passkeys/${encodeURIComponent(id)}`, undefined, 'DELETE'),

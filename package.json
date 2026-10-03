@@ -1,6 +1,6 @@
 {
   "name": "@nuxt4-layers/authentication",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Nuxt 4 foundation capability that establishes who has signed in and manages the secure lifecycle of the authenticated session.",
@@ -49,6 +49,7 @@
     "@types/node": "^24.13.6",
     "@types/pg": "^8.23.1",
     "nuxt": "^4.5.2",
+    "oauth2-mock-server": "^9.2.0",
     "pg": "^8.23.1",
     "typescript": "^6.0.3",
     "vitest": "^5.0.3",
