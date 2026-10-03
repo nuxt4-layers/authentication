@@ -14,6 +14,22 @@ export default defineNuxtConfig({
       secret: '',
       // NUXT_AUTHENTICATION_BASE_URL: canonical external origin, e.g. https://example.com
       baseUrl: '',
+      // NUXT_AUTHENTICATION_TRUST_PROXY: read the client IP from X-Forwarded-For.
+      // Enable only behind a proxy that overwrites that header.
+      trustProxy: false,
+    },
+    public: {
+      authentication: {
+        // BCP 47 locale passed to the mailer for rendering.
+        locale: 'en-GB',
+        // Application routes the layer links or redirects to. Hosts override these.
+        routes: {
+          signIn: '/sign-in',
+          afterSignIn: '/',
+          afterSignOut: '/',
+          resetPassword: '/reset-password',
+        },
+      },
     },
   },
 })

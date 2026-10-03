@@ -38,7 +38,8 @@ The host application:
 - supplies a mailer through `provideAuthenticationMailer` (required);
 - optionally supplies an event sink and policy overrides;
 - supplies `NUXT_AUTHENTICATION_SECRET` and `NUXT_AUTHENTICATION_BASE_URL` through secret management;
-- applies the layer's database migrations before serving traffic;
+- applies the layer's database migrations by calling `migrateAuthenticationDatabase()` once after supplying the database (authentication requests wait for it);
+- sets `NUXT_AUTHENTICATION_TRUST_PROXY=true` only when a reverse proxy overwrites `X-Forwarded-For`, so per-client throttling sees real client addresses;
 - integration-tests the composed system, including negative tests.
 
 ## 5. Layer responsibilities
@@ -59,6 +60,27 @@ The authentication layer:
 - No other capability reads the `authentication` schema. They use the public contract.
 - Hosted PostgreSQL (for example Supabase) is used as a plain PostgreSQL endpoint. A hosted provider's own authentication service MUST NOT run alongside this layer.
 
+### 6.1 Migrations
+
+Migrations are versioned, append-only SQL shipped with the layer (`server/database/migrations.ts`) and recorded in `<schema>.schema_migration`. `migrateAuthenticationDatabase()` applies the pending ones in a single transaction under an advisory lock, so several instances may start at once.
+
+A drift test (`tests/database.test.ts`) asserts that, after the migrations, the engine reports no missing tables, columns or indexes. An engine upgrade that changes its schema therefore fails CI until a new migration is added.
+
+### 6.2 Least-privilege database role (recommended)
+
+Run this as the database owner once, then give the host a connection string for `authentication_app`. On Supabase, use the SQL editor and connect through the session pooler as `authentication_app`.
+
+```sql
+create role authentication_app login password '<generated secret>';
+create schema if not exists authentication authorization authentication_app;
+-- authentication_app owns only its own schema; it receives no rights on public or other capabilities' schemas.
+revoke all on schema public from authentication_app;
+```
+
+Because the role owns the `authentication` schema, `migrateAuthenticationDatabase()` can create and alter its tables, and nothing else.
+
+On Supabase, also make sure `authentication` is not listed under **Project Settings → Data API → Exposed schemas**.
+
 ## 7. Failure boundaries
 
 | Condition | Behaviour |
@@ -68,6 +90,8 @@ The authentication layer:
 | Invalid policy | Validation error from `provideAuthenticationPolicy` at startup |
 | Event sink failure | Reported via `console.error`. The operation outcome is unchanged. |
 | Engine or database failure | `unavailable` (503). Internal details are not disclosed. |
+| Missing or short `NUXT_AUTHENTICATION_SECRET`, missing base URL, or non-https base URL in production (loopback excepted) | Error at the first authentication request; nothing is served insecurely |
+| Mailer failure | Logged. The HTTP response is unchanged, so it cannot reveal whether an account exists. |
 
 Driver and engine exceptions are translated at the boundary. They never become undocumented cross-layer contracts.
 

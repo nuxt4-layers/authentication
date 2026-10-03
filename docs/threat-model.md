@@ -34,10 +34,10 @@ This document records design intent and planned controls. It is not a claim of c
 | T1 | Credential stuffing and password spraying | Per-account and per-IP throttling, temporary lockout, MFA required by default, compromised-password check | 2, 3 |
 | T2 | Account enumeration | Uniform `invalid-credentials` errors, identical responses for reset and registration of existing emails, timing equalisation | 2 |
 | T3 | Offline cracking after database theft | Memory-hard password hashing using the engine's reviewed implementation, no custom cryptography, minimum length 15 | 2 |
-| T4 | Session hijacking | `__Host-` prefixed, `HttpOnly`, `Secure`, `SameSite=Lax` cookies; opaque tokens stored server-side; idle and absolute timeouts; revocation | 2 |
+| T4 | Session hijacking | `__Secure-` prefixed (over https), `HttpOnly`, `Secure`, `SameSite=Lax`, host-only cookies; opaque tokens stored server-side with no cookie cache; idle (sliding) and absolute timeouts; revocation | 2 |
 | T5 | Session fixation | Session rotated on sign-in, privilege change and step-up | 2 |
 | T6 | CSRF on state-changing endpoints | SameSite cookies plus origin checks against `baseUrl`; no state change on GET | 2 |
-| T7 | Reset/verification token abuse | Single-use, short-lived, hashed at rest, invalidated on use and on password change; never logged | 2 |
+| T7 | Reset/verification token abuse | Reset tokens: single-use, 30 minutes, hashed at rest, never logged. Email-verification links: signed, expire after 1 hour; reuse only re-confirms the same address | 2 |
 | T8 | MFA bypass | No session issued before the second factor; the interim challenge is bound to the first-factor attempt; TOTP replay prevention; backup codes hashed and single-use | 3 |
 | T9 | Phishing | Passkeys (WebAuthn) available to all and required for privileged administration | 3 |
 | T10 | Federated account takeover | Link by provider subject only; never auto-link to an unverified email; explicit linking while signed in | 4 |
@@ -76,4 +76,28 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | Error codes cannot reveal account existence | Implemented (contract, phase 1) | `tests/contracts.test.ts` |
 | Event sink failure cannot alter outcomes | Implemented (phase 1) | `tests/composition.test.ts` |
 | Contract free of engine/vendor types | Implemented (phase 1) | `tests/contracts.test.ts` |
-| Everything else in §3 | Planned | Added with each phase |
+| Database migrations idempotent and race-safe; tables confined to the capability schema | Implemented (phase 2) | `tests/database.test.ts` |
+| Engine schema drift detected | Implemented (phase 2) | `tests/database.test.ts` |
+| T1 Per-account lockout and per-client throttling; lock notification | Implemented (phase 2) | `tests/database.test.ts`, `tests/integration/api.test.ts` |
+| T1 Compromised-password check (k-anonymity, padded, fails open) | Implemented (phase 2) | `tests/internals.test.ts` |
+| T2 Uniform responses for sign-in, sign-up and reset | Implemented (phase 2) | `tests/integration/api.test.ts` |
+| T3 scrypt password hashing (engine), minimum length 15 | Implemented (phase 2) | `tests/internals.test.ts` (policy) |
+| T4 HttpOnly, SameSite=Lax cookies; server-side revocation; idle and absolute timeouts | Implemented (phase 2) | `tests/integration/api.test.ts` |
+| T5 Previous session revoked on sign-in | Implemented (phase 2) | `tests/integration/api.test.ts` |
+| T6 Origin check on state-changing requests | Implemented (phase 2) | `tests/integration/api.test.ts` |
+| T7 Single-use, hashed reset tokens | Implemented (phase 2) | `tests/integration/api.test.ts`, `tests/internals.test.ts` |
+| T11 Current password required to change password; notifications for change, reset and lockout | Implemented (phase 2) | `tests/integration/api.test.ts` |
+| T12 Events contain no email addresses, passwords or tokens | Implemented (phase 2) | `tests/integration/api.test.ts` |
+| T13 Secret length and https base URL enforced | Implemented (phase 2) | `tests/internals.test.ts` |
+| Telemetry and client-IP tracking disabled in the engine | Implemented (phase 2) | `tests/internals.test.ts` |
+| Open-redirect protection for return paths | Implemented (phase 2) | `tests/internals.test.ts`, `tests/integration/api.test.ts` |
+| T8, T9, T10 and step-up (T11) | Planned | Phases 3 and 4 |
+
+### Known gaps and risk treatment
+
+| Gap | Risk | Treatment |
+|---|---|---|
+| Compromised-password check fails open when HIBP is unreachable | A breached password may be accepted during an outage | Logged warning. Length minimum of 15 still applies. Revisit if outages are frequent. |
+| Email-verification links are stateless signed tokens, so they can be reused until expiry | Reuse only re-verifies the same address | Accepted. 1-hour expiry. |
+| Per-client throttling relies on correct `trustProxy` configuration | Behind a proxy without `trustProxy`, all clients share one address and hit the limit together; with `trustProxy` but no overwriting proxy, attackers can spoof addresses | Documented in the composition contract. The per-account lockout is unaffected. |
+| ASVS requirement identifiers not yet mapped per control | Evidence is not yet traceable to specific requirements | Map in phase 3, when MFA completes the authentication controls. |

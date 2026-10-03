@@ -41,10 +41,14 @@ One entry in the owner's "active sessions" list. It holds a coarse client descri
 
 ## 3. Error contract
 
-Failures crossing the HTTP boundary return `AuthenticationErrorBody`:
+Failures from the layer's HTTP endpoints and from `requireAuthenticatedPrincipal` are standard h3/Nuxt errors whose `data` field is an `AuthenticationErrorBody`:
 
 ```json
-{ "code": "invalid-credentials", "messageKey": "authentication.error.invalid-credentials" }
+{
+  "statusCode": 401,
+  "statusMessage": "invalid-credentials",
+  "data": { "code": "invalid-credentials", "messageKey": "authentication.error.invalid-credentials" }
+}
 ```
 
 The codes are in `AUTHENTICATION_ERROR_CODES`, and their HTTP statuses are in `AUTHENTICATION_ERROR_STATUS`.
@@ -71,6 +75,7 @@ Delivery is best effort. A failing sink is reported, but it never changes the ou
 | `password.maxLength` | 128 | ≥ 64 |
 | `password.compromisedCheck` | `hibp-range` | `hibp-range` or `disabled` |
 | `signInThrottle.maxFailedAttempts` | 5 | 3–100 |
+| `signInThrottle.maxFailedAttemptsPerClient` | 50 | 10–10 000 |
 | `signInThrottle.windowSeconds` / `lockoutSeconds` | 900 / 900 | 60–86 400 |
 | `session.idleTimeoutSeconds` | 3 600 | ≥ 300, and not more than the absolute lifetime |
 | `session.absoluteLifetimeSeconds` | 86 400 | 900–2 592 000 |
@@ -95,11 +100,64 @@ The host supplies these from a Nitro plugin. See [composition-contract.md](compo
 
 `PostgresPoolLike` is a structural interface satisfied by a `pg` `Pool`. The contract does not depend on the driver package.
 
-## 7. Planned additions (not yet in contract version 1)
+## 7. Server helpers
 
-These are added as each phase lands, and recorded here when they do:
+These are auto-imported into the host's server code:
 
-- server helpers `getAuthenticatedPrincipal(event)` and `requireAuthenticatedPrincipal(event, requirement?)`;
-- the client composable `useAuthentication()`;
-- the route middleware `authenticated` and `guest`;
-- the HTTP endpoint map.
+| Function | Behaviour |
+|---|---|
+| `getAuthenticatedPrincipal(event)` | The current `AuthenticatedPrincipal`, or `null`. Resolved once per request. |
+| `requireAuthenticatedPrincipal(event, requirement?)` | The principal, or throws `unauthenticated` (401), `insufficient-assurance` (403) or `reauthentication-required` (401). |
+| `migrateAuthenticationDatabase()` | Applies pending migrations to the capability schema. Requests wait for it to finish. |
+
+Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
+
+## 8. HTTP endpoints
+
+All endpoints live under `/api/authentication`. Every state-changing request must carry an `Origin` (or `Referer`) header matching `NUXT_AUTHENTICATION_BASE_URL`, otherwise it fails with `origin-rejected` (403). Bodies are JSON and strictly validated, so unknown fields are rejected.
+
+| Method and path | Body | Success | Notes |
+|---|---|---|---|
+| `POST /sign-up` | `{ email, password }` | 202 `{ status: 'accepted' }` | Identical for new and existing addresses. A verification email is sent to new addresses. |
+| `POST /sign-in` | `{ email, password }` | 200 `{ status: 'signed-in' }` | Sets the session cookie and replaces any previous session. |
+| `POST /sign-out` | none | 200 `{ status: 'signed-out' }` | Revokes the session server-side. Always succeeds. |
+| `GET /session` | | 200 `{ principal }` | `principal` is `null` when signed out. `Cache-Control: no-store`. |
+| `GET /verify-email?token=` | | 303 redirect | To `routes.signIn` with `?verification=success` or `?verification=failed`. |
+| `POST /password/forgot` | `{ email }` | 202 `{ status: 'accepted' }` | Identical for unknown addresses. At most 3 emails per address per throttle window. |
+| `POST /password/reset` | `{ token, password }` | 200 `{ status: 'password-reset' }` | Single-use token, valid for 30 minutes. Revokes every session. |
+| `POST /password/change` | `{ currentPassword, newPassword }` | 200 `{ status: 'password-changed' }` | Requires a session. Revokes other sessions and rotates the current one. |
+| `GET /sessions` | | 200 `{ sessions }` | The principal's own `AuthenticationSessionSummary[]`, newest first. |
+| `DELETE /sessions/:id` | | 204 | Revokes one of the principal's own sessions. Another principal's id answers `validation-failed`. |
+| `POST /sessions/revoke-others` | none | 200 `{ status: 'revoked' }` | Revokes every session except the current one. |
+
+## 9. Client surface
+
+`useAuthentication()` is auto-imported in the host's app. It returns:
+
+| Member | Meaning |
+|---|---|
+| `principal` | Read-only `AuthenticatedPrincipal \| null`. |
+| `isAuthenticated` | Computed boolean. |
+| `ready` | True once the session has loaded. A layer plugin loads it before the first navigation. |
+| `refresh()` | Reloads the session from the server. |
+| `signUp`, `signIn`, `signOut`, `requestPasswordReset`, `resetPassword`, `changePassword`, `listSessions`, `revokeSession`, `revokeOtherSessions` | Each resolves to `AuthenticationResult<T>`: `{ ok: true, data }` or `{ ok: false, code }`. |
+
+Named route middleware:
+
+- `authenticated` sends anonymous visitors to `routes.signIn?redirect=<path>`.
+- `guest` sends signed-in visitors to the `redirect` query, but only same-origin paths are accepted. Otherwise they go to `routes.afterSignIn`.
+
+Client state and middleware improve the user experience. They are not security enforcement.
+
+## 10. Route configuration
+
+These are public runtime config values under `authentication.routes`, and hosts may override them:
+
+| Key | Default | Used for |
+|---|---|---|
+| `signIn` | `/sign-in` | `authenticated` middleware target and verification-link redirect |
+| `afterSignIn` | `/` | `guest` middleware fallback |
+| `afterSignOut` | `/` | Reserved for the default pages (phase 5) |
+| `resetPassword` | `/reset-password` | Path in password-reset emails (`?token=`) |
+
+`authentication.locale` (default `en-GB`) is passed to the mailer with every message.
