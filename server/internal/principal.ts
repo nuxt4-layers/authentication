@@ -18,8 +18,8 @@ export interface EngineSessionRecord {
   authenticationMethods?: string | null
 }
 
-const KNOWN_METHODS: readonly AuthenticationMethod[] = ['password', 'totp', 'backup-code', 'passkey', 'federated']
-const SECOND_FACTORS: readonly AuthenticationMethod[] = ['totp', 'backup-code', 'passkey']
+const KNOWN_METHODS: readonly AuthenticationMethod[] = ['password', 'totp', 'backup-code', 'passkey', 'federated', 'remembered-device']
+const SECOND_FACTORS: readonly AuthenticationMethod[] = ['totp', 'backup-code', 'passkey', 'remembered-device']
 
 export function parseMethods(value: string | null | undefined): AuthenticationMethod[] {
   return (value ?? '')
@@ -31,7 +31,8 @@ export function parseMethods(value: string | null | undefined): AuthenticationMe
 export function assuranceLevel(methods: readonly AuthenticationMethod[]): AuthenticationAssuranceLevel {
   // A passkey is multi-factor on its own (possession plus user verification).
   if (methods.includes('passkey')) return 'aal2'
-  return methods.some(method => SECOND_FACTORS.includes(method)) && methods.length >= 2 ? 'aal2' : 'aal1'
+  // Otherwise aal2 needs a password plus a second factor.
+  return methods.includes('password') && methods.some(method => SECOND_FACTORS.includes(method)) ? 'aal2' : 'aal1'
 }
 
 const toDate = (value: Date | string) => (value instanceof Date ? value : new Date(value))

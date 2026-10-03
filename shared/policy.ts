@@ -46,6 +46,14 @@ const policySchema = z.object({
   /** Whether accounts must enrol a second factor. */
   mfa: z.enum(['required', 'optional']),
 
+  rememberedDevice: z.object({
+    /**
+     * Days a device may skip the second factor after the user opts in. 0 (the
+     * default) disables remembered devices. Enabling it is a documented risk.
+     */
+    days: z.int().min(0).max(30),
+  }).strict(),
+
   /** Whether an email address must be verified before the first sign-in. */
   emailVerification: z.enum(['required', 'optional']),
 }).strict().refine(
@@ -68,6 +76,7 @@ export const DEFAULT_AUTHENTICATION_POLICY: Readonly<AuthenticationPolicy> = Obj
   session: Object.freeze({ idleTimeoutSeconds: 3_600, absoluteLifetimeSeconds: 86_400 }),
   reauthentication: Object.freeze({ maxAgeSeconds: 900 }),
   mfa: 'required' as const,
+  rememberedDevice: Object.freeze({ days: 0 }),
   emailVerification: 'required' as const,
 })
 
@@ -83,6 +92,7 @@ export function resolveAuthenticationPolicy(input: AuthenticationPolicyInput = {
     session: { ...defaults.session, ...input.session },
     reauthentication: { ...defaults.reauthentication, ...input.reauthentication },
     mfa: input.mfa ?? defaults.mfa,
+    rememberedDevice: { ...defaults.rememberedDevice, ...input.rememberedDevice },
     emailVerification: input.emailVerification ?? defaults.emailVerification,
   })
 }

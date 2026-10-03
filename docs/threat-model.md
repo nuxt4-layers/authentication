@@ -39,7 +39,7 @@ This document records design intent and planned controls. It is not a claim of c
 | T6 | CSRF on state-changing endpoints | SameSite cookies plus origin checks against `baseUrl`; no state change on GET | 2 |
 | T7 | Reset/verification token abuse | Reset tokens: single-use, 30 minutes, hashed at rest, never logged. Email-verification links: signed, expire after 1 hour; reuse only re-confirms the same address | 2 |
 | T8 | MFA bypass | No session issued before the second factor; the interim challenge is bound to the first-factor attempt; TOTP replay prevention; backup codes hashed and single-use | 3 |
-| T9 | Phishing | Passkeys (WebAuthn) available to all and required for privileged administration | 3 |
+| T9 | Phishing | Passkeys (WebAuthn, user verification required) available to all. Hosts require them for privileged administration with `requireAuthenticatedPrincipal(event, { phishingResistant: true })` | 3 |
 | T10 | Federated account takeover | Link by provider subject only; never auto-link to an unverified email; explicit linking while signed in | 4 |
 | T11 | Sensitive change without the owner present | Re-authentication within `maxAgeSeconds` for password, email, MFA and session changes; security notification emails | 2, 3 |
 | T12 | Secret leakage via logs or events | Events carry no secrets or email addresses; mailers must not log action URLs; structured redaction | 1 (contract), 2 |
@@ -91,7 +91,32 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | T13 Secret length and https base URL enforced | Implemented (phase 2) | `tests/internals.test.ts` |
 | Telemetry and client-IP tracking disabled in the engine | Implemented (phase 2) | `tests/internals.test.ts` |
 | Open-redirect protection for return paths | Implemented (phase 2) | `tests/internals.test.ts`, `tests/integration/api.test.ts` |
-| T8, T9, T10 and step-up (T11) | Planned | Phases 3 and 4 |
+| MFA required by default; sessions without a second factor limited to enrolment (`requireAuthenticatedPrincipal` defaults to aal2) | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T8 No session before the second factor; 5-minute interim cookie | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T8 TOTP replay rejected (last-used time step per user, atomic) | Implemented (phase 3) | `tests/integration/mfa.test.ts`, `tests/internals.test.ts` |
+| T8 TOTP activated only after a first valid code; secret encrypted at rest | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T8 Backup codes: about 95 bits, single-use, stored as HMAC-SHA-256 digests keyed with the server secret | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T8 Second-factor lockout after repeated failures | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T9 Passkeys with user verification enforced by the layer (the engine does not require it) | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T9 Forged assertions rejected; another principal's passkey cannot be removed | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T11 Step-up: sensitive operations need authentication within 15 minutes; re-authenticate by password, TOTP or passkey | Implemented (phase 3) | `tests/integration/api.test.ts`, `tests/integration/mfa.test.ts` |
+| Remembered devices off by default (policy `rememberedDevice.days: 0`) | Implemented (phase 3) | `tests/integration/mfa.test.ts`, `tests/policy.test.ts` |
+| Notifications for MFA enrolment and removal, backup-code use and regeneration | Implemented (phase 3) | `tests/integration/mfa.test.ts` |
+| T10 Federated account linking | Planned | Phase 4 |
+
+### ASVS 5.0 mapping (by section)
+
+This maps controls to OWASP ASVS 5.0 chapters and sections. Requirement-level identifiers must be checked against the official 5.0.0 text before they are cited as evidence. That check is an open action and is listed below.
+
+| ASVS 5.0 area | Controls |
+|---|---|
+| V6 Authentication: password security | Minimum 15 / maximum 128 characters, breached-password check, no composition rules, scrypt hashing |
+| V6 Authentication: general security | Uniform errors, per-account lockout, per-client throttling, security notifications |
+| V6 Authentication: factor lifecycle and recovery | Single-use reset tokens hashed at rest, reset revokes sessions, factor changes require recent authentication and notify |
+| V6 Authentication: multi-factor | MFA required by default, TOTP replay protection, backup codes hashed and single-use, second-factor lockout |
+| V6 Authentication: cryptographic authenticators | Passkeys with user verification, signature counters checked by the engine |
+| V7 Session management | Opaque server-side tokens, HttpOnly/SameSite cookies, rotation on sign-in and privilege change, idle and absolute timeouts, revocation, active-session list, re-authentication for sensitive operations |
+| V3 Web frontend security (CSRF) | Origin check on state-changing requests, SameSite=Lax |
 
 ### Known gaps and risk treatment
 
@@ -100,4 +125,6 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | Compromised-password check fails open when HIBP is unreachable | A breached password may be accepted during an outage | Logged warning. Length minimum of 15 still applies. Revisit if outages are frequent. |
 | Email-verification links are stateless signed tokens, so they can be reused until expiry | Reuse only re-verifies the same address | Accepted. 1-hour expiry. |
 | Per-client throttling relies on correct `trustProxy` configuration | Behind a proxy without `trustProxy`, all clients share one address and hit the limit together; with `trustProxy` but no overwriting proxy, attackers can spoof addresses | Documented in the composition contract. The per-account lockout is unaffected. |
-| ASVS requirement identifiers not yet mapped per control | Evidence is not yet traceable to specific requirements | Map in phase 3, when MFA completes the authentication controls. |
+| ASVS mapping is by section, not yet by requirement identifier | Evidence is not yet traceable to individual requirements | Open action: verify identifiers against the official ASVS 5.0.0 text and add them to the register. |
+| Remembered devices, when a host enables them, let a stolen device cookie skip the second factor | Second-factor bypass on that device for up to `days` | Off by default. A host that enables it must record the risk. |
+| Passkeys need a registrable domain as the relying-party ID | IP-address origins cannot use passkeys in browsers | Production base URLs use a domain. Tests use a software authenticator. |

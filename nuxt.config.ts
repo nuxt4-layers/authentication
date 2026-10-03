@@ -22,12 +22,17 @@ export default defineNuxtConfig({
       authentication: {
         // BCP 47 locale passed to the mailer for rendering.
         locale: 'en-GB',
+        // Name shown in authenticator apps and passkey prompts; defaults to the base URL's host.
+        appName: '',
         // Application routes the layer links or redirects to. Hosts override these.
         routes: {
           signIn: '/sign-in',
           afterSignIn: '/',
           afterSignOut: '/',
           resetPassword: '/reset-password',
+          // Where the `authenticated` middleware sends sessions that must enrol
+          // a second factor or step up to aal2.
+          mfa: '/mfa',
         },
       },
     },

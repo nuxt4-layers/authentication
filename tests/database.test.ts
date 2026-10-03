@@ -38,7 +38,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
       `select table_schema, table_name from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema') order by table_name`,
     )
     expect(rows.every(row => row.table_schema === 'authentication')).toBe(true)
-    expect(rows.map(row => row.table_name)).toEqual(['account', 'schema_migration', 'session', 'sign_in_throttle', 'user', 'verification'])
+    expect(rows.map(row => row.table_name)).toEqual(['account', 'passkey', 'schema_migration', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
   })
 
   it('matches the engine schema exactly (drift check on engine upgrades)', async () => {
@@ -47,6 +47,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
       schema: 'authentication',
       secret: 'x'.repeat(40),
       baseUrl: 'http://localhost:3000',
+      appName: 'Test',
       policy: resolveAuthenticationPolicy(),
     })
     const pending = await getMigrations(options)
@@ -67,7 +68,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
     url.password = 'test'
     const restricted = new pg.Pool({ connectionString: url.toString() })
     try {
-      expect(await runAuthenticationMigrations(restricted, 'auth_owned')).toEqual(['0001_initial'])
+      expect(await runAuthenticationMigrations(restricted, 'auth_owned')).toEqual(AUTHENTICATION_MIGRATIONS.map(m => m.id))
       await expect(restricted.query('create table public.intruder (id int)')).rejects.toThrow(/permission denied/)
       await expect(restricted.query('create schema elsewhere')).rejects.toThrow(/permission denied/)
     }
@@ -79,7 +80,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
   })
 
   it('supports a host-chosen schema name and rejects unsafe ones', async () => {
-    expect(await runAuthenticationMigrations(pool, 'auth_alt')).toEqual(['0001_initial'])
+    expect(await runAuthenticationMigrations(pool, 'auth_alt')).toEqual(AUTHENTICATION_MIGRATIONS.map(m => m.id))
     expect(() => quoteSchema('auth"; drop schema public; --')).toThrow(TypeError)
   })
 

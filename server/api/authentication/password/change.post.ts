@@ -1,18 +1,19 @@
 import { defineEventHandler } from 'h3'
-import { authenticationError, clientInfo, engineErrorCode, forwardCookies, requestHeaders, translateEngineError } from '../../../internal/http'
+import { authenticationError, clientInfo, engineErrorCode, forwardCookies, requestHeaders, sessionTokenFromCookies, translateEngineError } from '../../../internal/http'
 import { changePasswordBody, readBodyAs } from '../../../internal/input'
 import { forgetPrincipal, trustProxy, useAuthenticationRuntime } from '../../../internal/nitro'
 import { assertAcceptablePassword } from '../../../internal/passwords'
 import { systemEvent } from '../../../internal/runtime'
 import { accountKey } from '../../../internal/throttle'
-import { requireAuthenticatedPrincipal } from '../../../utils/authentication-principal'
+import { requireAccess } from '../../../internal/guards'
+import { recordSessionAuthentication } from '../../../internal/mfa'
 
 /**
- * Changes the password. The current password re-authenticates the request.
- * Every other session is revoked and the current one is rotated.
+ * Changes the password. Requires a recent authentication and the current
+ * password. Every other session is revoked and the current one is rotated.
  */
 export default defineEventHandler(async (event) => {
-  const principal = await requireAuthenticatedPrincipal(event)
+  const principal = await requireAccess(event, 'sensitive')
   const { currentPassword, newPassword } = await readBodyAs(event, changePasswordBody)
   const runtime = await useAuthenticationRuntime()
   const context = await runtime.engine.$context
@@ -32,6 +33,9 @@ export default defineEventHandler(async (event) => {
       returnHeaders: true,
     })
     forwardCookies(event, result.headers)
+    // The rotated session keeps the methods it was authenticated with.
+    const token = sessionTokenFromCookies(result.headers)
+    if (token) await recordSessionAuthentication(runtime, token, principal.assurance.methods)
     forgetPrincipal(event)
   }
   catch (error) {

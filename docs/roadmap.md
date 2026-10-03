@@ -5,8 +5,8 @@ Each phase is delivered as its own pull request with tests, and keeps `pnpm chec
 | Phase | Scope | Status |
 |---|---|---|
 | 1. Foundation | Package, manifest, public contract, composition ports (fail closed), policy, docs, threat model, CI, playground | Complete |
-| 2. Core | Better Auth engine (private), PostgreSQL schema and migrations, email and password, email verification, password reset, sessions (rotation, idle/absolute expiry, revocation, active-session list), throttling and lockout, compromised-password check, `getAuthenticatedPrincipal` / `requireAuthenticatedPrincipal`, `useAuthentication()`, route middleware | In review |
-| 3. Multi-factor | TOTP with backup codes, passkeys, step-up and re-authentication, MFA-required enrolment flow | Planned |
+| 2. Core | Better Auth engine (private), PostgreSQL schema and migrations, email and password, email verification, password reset, sessions (rotation, idle/absolute expiry, revocation, active-session list), throttling and lockout, compromised-password check, `getAuthenticatedPrincipal` / `requireAuthenticatedPrincipal`, `useAuthentication()`, route middleware | Complete |
+| 3. Multi-factor | TOTP with backup codes, passkeys, step-up and re-authentication, MFA-required enrolment flow | In review |
 | 4. Federation | External identity providers with safe linking by provider subject | Planned |
 | 5. Default pages | Accessible (WCAG 2.2 AA), localisable pages styled only through semantic design tokens with fallbacks; host can disable; Playwright end-to-end tests | Planned |
 | 6. Host integration | Composition into a host application with its own adapters and negative tests | Planned |

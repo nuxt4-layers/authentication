@@ -165,6 +165,7 @@ describe('engine security configuration', () => {
     schema: 'authentication',
     secret: 'x'.repeat(40),
     baseUrl: 'https://example.com',
+    appName: 'Test',
     policy: resolveAuthenticationPolicy(),
   })
 
@@ -183,6 +184,11 @@ describe('engine security configuration', () => {
     expect(options.advanced?.defaultCookieAttributes).toMatchObject({ httpOnly: true, sameSite: 'lax' })
   })
 
+  it('enables TOTP with verification-before-activation and passkeys requiring user verification', () => {
+    const ids = options.plugins.map(plugin => plugin.id)
+    expect(ids).toEqual(['two-factor', 'passkey'])
+  })
+
   it('applies the policy: verification, lengths, idle timeout, reset revocation', () => {
     expect(options.emailAndPassword).toMatchObject({
       requireEmailVerification: true,
@@ -192,10 +198,78 @@ describe('engine security configuration', () => {
       revokeSessionsOnPasswordReset: true,
     })
     expect(options.session?.expiresIn).toBe(3_600)
-    expect(options.session?.freshAge).toBe(900)
+    expect(options.session?.freshAge).toBe(0)
   })
 
   it('keeps every engine table in the capability schema', () => {
     expect((options.database as { schemaName?: string }).schemaName).toBe('authentication')
+  })
+})
+
+describe('multi-factor internals', async () => {
+  const { matchTotpStep, mergeMethods, assertionUserVerified, registrationUserVerified } = await import('../server/internal/mfa')
+  const { hashBackupCode } = await import('../server/internal/engine-options')
+  const { sessionTokenFromCookies } = await import('../server/internal/http')
+  const { totpCode } = await import('./support/totp')
+  const { VirtualAuthenticator } = await import('./support/webauthn')
+
+  // The engine stores a 32-character secret; authenticator apps receive its bytes in base32.
+  const secret = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345'
+  const base32 = (bytes: Buffer) => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+    let bits = 0, value = 0, out = ''
+    for (const byte of bytes) {
+      value = (value << 8) | byte
+      bits += 8
+      while (bits >= 5) { out += alphabet[(value >>> (bits - 5)) & 31]; bits -= 5 }
+    }
+    return bits > 0 ? out + alphabet[(value << (5 - bits)) & 31] : out
+  }
+  const uri = `otpauth://totp/Test:user?secret=${base32(Buffer.from(secret))}&issuer=Test`
+
+  it('matches the independent RFC 6238 oracle for the current and adjacent steps', () => {
+    const now = 1_790_000_000_000
+    const step = Math.floor(now / 30_000)
+    expect(matchTotpStep(secret, totpCode(uri, 0, now), now)).toBe(step)
+    expect(matchTotpStep(secret, totpCode(uri, -1, now), now)).toBe(step - 1)
+    expect(matchTotpStep(secret, totpCode(uri, 1, now), now)).toBe(step + 1)
+    expect(matchTotpStep(secret, totpCode(uri, 2, now), now)).toBeNull()
+    expect(matchTotpStep(secret, 'abcdef', now)).toBeNull()
+  })
+
+  it('merges methods without duplicates, preserving order', () => {
+    expect(mergeMethods(['password'], ['totp', 'password'])).toEqual(['password', 'totp'])
+  })
+
+  it('rates a remembered device after a password as aal2, and alone as aal1', () => {
+    expect(assuranceLevel(['password', 'remembered-device'])).toBe('aal2')
+    expect(assuranceLevel(['remembered-device'])).toBe('aal1')
+  })
+
+  it('digests backup codes with a keyed hash', () => {
+    const digest = hashBackupCode('server-secret-one', 'ABCDE-FGHIJKLMNOP')
+    expect(digest).toMatch(/^[0-9a-f]{64}$/)
+    expect(hashBackupCode('server-secret-two', 'ABCDE-FGHIJKLMNOP')).not.toBe(digest)
+    expect(hashBackupCode('server-secret-one', ' ABCDE-FGHIJKLMNOP ')).toBe(digest)
+  })
+
+  it('reads the rotated session token from the engine cookie', () => {
+    const headers = new Headers()
+    headers.append('set-cookie', 'authentication.dont_remember=; Max-Age=0')
+    headers.append('set-cookie', `authentication.session_token=${encodeURIComponent('tok123.sig/+=')}; Path=/; HttpOnly`)
+    expect(sessionTokenFromCookies(headers)).toBe('tok123')
+    const secure = new Headers({ 'set-cookie': '__Secure-authentication.session_token=abc.def; Path=/' })
+    expect(sessionTokenFromCookies(secure)).toBe('abc')
+    expect(sessionTokenFromCookies(new Headers())).toBeNull()
+  })
+
+  it('detects user verification in registrations and assertions', () => {
+    const authenticator = new VirtualAuthenticator('https://example.com', 'example.com')
+    expect(registrationUserVerified(authenticator.register({ challenge: 'c' }))).toBe(true)
+    expect(registrationUserVerified(authenticator.register({ challenge: 'c' }, { userVerified: false }))).toBe(false)
+    expect(assertionUserVerified(authenticator.authenticate({ challenge: 'c' }))).toBe(true)
+    expect(assertionUserVerified(authenticator.authenticate({ challenge: 'c' }, { userVerified: false }))).toBe(false)
+    expect(assertionUserVerified({ response: { authenticatorData: '!!' } })).toBe(false)
+    expect(registrationUserVerified(null)).toBe(false)
   })
 })

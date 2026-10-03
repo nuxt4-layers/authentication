@@ -20,6 +20,7 @@ export const AUTHENTICATION_EVENT_TYPES = [
   'authentication.mfa-enrolled',
   'authentication.mfa-removed',
   'authentication.backup-codes-regenerated',
+  'authentication.backup-code-used',
   'authentication.reauthenticated',
   'authentication.session-revoked',
   'authentication.federated-identity-linked',

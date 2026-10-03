@@ -16,6 +16,10 @@ Better Auth is the private engine (from phase 2) and must never appear in `contr
 ## Rules
 - Public surface: package root, `./contracts`, `./capability`, the `provide*`/`migrateAuthenticationDatabase`/`get|requireAuthenticatedPrincipal` server functions, `useAuthentication()`, the `authenticated`/`guest` middleware and `/api/authentication/*`. Everything else (`server/internal`, `server/database`) is private.
 - Engine (Better Auth) routes are never mounted; endpoints call `engine.api.*` server-side and translate errors to contract codes.
+- Engine gaps the layer closes itself (keep their tests): TOTP replay (`totp_last_step`), passkey user verification (engine passes `requireUserVerification: false`), backup codes stored as keyed digests, session freshness from `authenticatedAt` (engine `freshAge` is 0 because it measures `createdAt`).
+- When the engine rotates a session it may return the OLD token; read the new one from Set-Cookie (`sessionTokenFromCookies`) and record its methods with `recordSessionAuthentication`.
+- `requireAuthenticatedPrincipal` defaults to the policy's required level (aal2 when MFA is required). Layer endpoints choose an access level via `requireAccess` (enrolment / step-up / standard / sensitive).
+- TOTP tests: each user can use at most the current and next time step without waiting; use `safeStep()` and fresh accounts.
 - Required ports fail closed. No implicit in-memory or file fallback stores.
 - Authentication is tenant-agnostic. No roles, groups, tenants or profile data here.
 - No secrets, codes, tokens or email addresses in events or logs.

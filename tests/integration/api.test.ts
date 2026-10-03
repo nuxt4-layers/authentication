@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 import { setup, url } from '@nuxt/test-utils/e2e'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import type { AuthenticatedPrincipal, AuthenticationEvent, AuthenticationMessage } from '../../contracts'
+import { afterAll, describe, expect, it } from 'vitest'
 import { createTestDatabase, hasDatabase, requireDatabaseInCi } from '../support/database'
+import { createHarness, PASSWORD } from '../support/harness'
 
 /**
  * Black-box tests of the composed layer: the playground is built and started as
@@ -15,75 +15,9 @@ requireDatabaseInCi()
 
 const PORT = 3417
 const ORIGIN = `http://127.0.0.1:${PORT}`
-const PASSWORD = 'correct horse battery staple'
 const database = hasDatabase ? await createTestDatabase() : null
 
-/** A minimal browser: one cookie jar, same-origin requests. */
-class Browser {
-  cookies = new Map<string, string>()
-
-  async request(path: string, init: { method?: string, body?: unknown, origin?: string | null } = {}) {
-    const headers: Record<string, string> = { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0' }
-    if (init.body !== undefined) headers['content-type'] = 'application/json'
-    if (init.origin !== null) headers.origin = init.origin ?? ORIGIN
-    if (this.cookies.size) headers.cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ')
-    const response = await fetch(url(path), {
-      method: init.method ?? 'GET',
-      headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      redirect: 'manual',
-    })
-    const setCookies = response.headers.getSetCookie()
-    for (const cookie of setCookies) {
-      const [pair] = cookie.split(';')
-      const [name, ...rest] = pair!.split('=')
-      const value = rest.join('=')
-      if (value === '' || /max-age=0/i.test(cookie)) this.cookies.delete(name!)
-      else this.cookies.set(name!, value)
-    }
-    const text = await response.text()
-    const json = response.headers.get('content-type')?.includes('application/json')
-    const data = json && text ? JSON.parse(text) : null
-    return { status: response.status, data, setCookies, location: response.headers.get('location') }
-  }
-
-  post(path: string, body?: unknown, origin?: string | null) {
-    return this.request(path, { method: 'POST', body: body ?? {}, origin })
-  }
-
-  async principal(): Promise<AuthenticatedPrincipal | null> {
-    return (await this.request('/api/authentication/session')).data.principal
-  }
-}
-
-async function recorder(): Promise<{ messages: AuthenticationMessage[], events: AuthenticationEvent[] }> {
-  return (await new Browser().request('/api/__playground/recorder')).data
-}
-
-async function lastMessage(to: string, kind: AuthenticationMessage['kind']): Promise<AuthenticationMessage> {
-  const { messages } = await recorder()
-  const message = messages.filter(m => m.to === to && m.kind === kind).at(-1)
-  expect(message, `${kind} message to ${to}`).toBeDefined()
-  return message!
-}
-
-async function messageCount(to: string, kind: AuthenticationMessage['kind']): Promise<number> {
-  return (await recorder()).messages.filter(m => m.to === to && m.kind === kind).length
-}
-
-let sequence = 0
-const freshEmail = () => `user${++sequence}.${Date.now()}@example.com`
-
-/** Registers, verifies and signs in a new account. */
-async function verifiedAccount(browser = new Browser()) {
-  const email = freshEmail()
-  await browser.post('/api/authentication/sign-up', { email, password: PASSWORD })
-  const verification = await lastMessage(email, 'email-verification')
-  await browser.request(new URL(verification.actionUrl!).pathname + new URL(verification.actionUrl!).search)
-  const signIn = await browser.post('/api/authentication/sign-in', { email, password: PASSWORD })
-  expect(signIn.status).toBe(200)
-  return { email, browser }
-}
+const { Browser, recorder, lastMessage, messageCount, freshEmail, verifiedAccount } = createHarness(ORIGIN)
 
 describe.skipIf(!hasDatabase)('authentication HTTP API (composed playground)', async () => {
   await setup({
@@ -96,6 +30,7 @@ describe.skipIf(!hasDatabase)('authentication HTTP API (composed playground)', a
       AUTHENTICATION_PLAYGROUND_TEST: '1',
       NUXT_AUTHENTICATION_SECRET: 'integration-test-secret-that-is-long-enough-0123456789',
       NUXT_AUTHENTICATION_BASE_URL: ORIGIN,
+      AUTHENTICATION_PLAYGROUND_MFA: 'optional',
     },
   })
 
@@ -285,6 +220,32 @@ describe.skipIf(!hasDatabase)('authentication HTTP API (composed playground)', a
       expect(await copy.principal()).toBeNull()
     })
 
+    it('keeps listing sessions once the session is older than the re-authentication window', async () => {
+      const { browser } = await verifiedAccount()
+      const sessionId = (await browser.principal())!.sessionId
+      const pool = new pg.Pool({ connectionString: database!.url })
+      await pool.query(`update "authentication"."session" set "createdAt" = now() - interval '20 minutes', "authenticatedAt" = now() - interval '20 minutes' where "id" = $1`, [sessionId])
+      await pool.end()
+      expect((await browser.request('/api/authentication/sessions')).status).toBe(200)
+    })
+
+    it('requires a recent authentication to change the password, restored by re-authenticating', async () => {
+      const { browser } = await verifiedAccount()
+      const sessionId = (await browser.principal())!.sessionId
+      const pool = new pg.Pool({ connectionString: database!.url })
+      await pool.query(`update "authentication"."session" set "authenticatedAt" = now() - interval '20 minutes' where "id" = $1`, [sessionId])
+      await pool.end()
+      const stale = await browser.post('/api/authentication/password/change', { currentPassword: PASSWORD, newPassword: 'a brand new long passphrase' })
+      expect(stale.status).toBe(401)
+      expect(stale.data.data.code).toBe('reauthentication-required')
+
+      const wrong = await browser.post('/api/authentication/reauthenticate', { method: 'password', password: 'not my password at all' })
+      expect(wrong.status).toBe(401)
+      expect((await browser.post('/api/authentication/reauthenticate', { method: 'password', password: PASSWORD })).status).toBe(200)
+      const fresh = await browser.post('/api/authentication/password/change', { currentPassword: PASSWORD, newPassword: 'a brand new long passphrase' })
+      expect(fresh.status).toBe(200)
+    })
+
     it('ends sessions older than the absolute lifetime', async () => {
       const { browser } = await verifiedAccount()
       const sessionId = (await browser.principal())!.sessionId
@@ -298,10 +259,6 @@ describe.skipIf(!hasDatabase)('authentication HTTP API (composed playground)', a
   })
 
   describe('password management', () => {
-    beforeEach(() => {
-      sequence += 100
-    })
-
     it('resets a password with a single-use token and revokes every session', async () => {
       const { email, browser } = await verifiedAccount()
       const anonymous = new Browser()

@@ -39,6 +39,8 @@ The host application:
 - optionally supplies an event sink and policy overrides;
 - supplies `NUXT_AUTHENTICATION_SECRET` and `NUXT_AUTHENTICATION_BASE_URL` through secret management;
 - applies the layer's database migrations by calling `migrateAuthenticationDatabase()` once after supplying the database (authentication requests wait for it);
+- serves the application from a registrable domain (not an IP address) so passkeys work; the passkey relying-party ID is the base URL's host;
+- provides a route at `routes.mfa` where sessions below the required level enrol a second factor or step up (the default pages arrive in phase 5);
 - sets `NUXT_AUTHENTICATION_TRUST_PROXY=true` only when a reverse proxy overwrites `X-Forwarded-For`, so per-client throttling sees real client addresses;
 - integration-tests the composed system, including negative tests.
 

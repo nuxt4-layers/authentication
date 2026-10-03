@@ -1,13 +1,16 @@
 import { defineEventHandler } from 'h3'
 import { authenticationError, clientInfo, engineErrorCode, forwardCookies, requestHeaders, translateEngineError } from '../../internal/http'
 import { credentialsBody, readBodyAs } from '../../internal/input'
-import { forgetPrincipal, trustProxy, useAuthenticationRuntime } from '../../internal/nitro'
+import { trustProxy, useAuthenticationRuntime } from '../../internal/nitro'
 import { systemEvent } from '../../internal/runtime'
+import { completeSignIn, previousSessionToken } from '../../internal/sign-in'
 import { accountKey, clientKey } from '../../internal/throttle'
 
 /**
  * Email and password sign-in with per-account lockout and per-client throttling.
  * Locked, unknown and wrong-password attempts all answer `invalid-credentials`.
+ * Accounts with TOTP answer `second-factor-required`; no session exists until
+ * `POST /mfa/verify` succeeds.
  */
 export default defineEventHandler(async (event) => {
   const { email, password } = await readBodyAs(event, credentialsBody)
@@ -29,19 +32,31 @@ export default defineEventHandler(async (event) => {
   }
 
   const headers = requestHeaders(event)
-  const previous = await runtime.engine.api.getSession({ headers }).catch(() => null)
+  const previousToken = await previousSessionToken(runtime, headers)
 
   try {
     const result = await runtime.engine.api.signInEmail({ body: { email, password }, headers, returnHeaders: true })
-    forwardCookies(event, result.headers)
-    await throttle.clear(account)
-    // Session fixation: the request's previous session does not survive a new sign-in.
-    if (previous?.session.token) {
-      const context = await runtime.engine.$context
-      await context.internalAdapter.deleteSession(previous.session.token)
+    const response = result.response as { token?: string | null, twoFactorRedirect?: boolean, user?: { id: string, twoFactorEnabled?: boolean } }
+
+    if (response.twoFactorRedirect) {
+      // Password correct; the engine has set a short-lived interim cookie only.
+      forwardCookies(event, result.headers)
+      await throttle.clear(account)
+      return { status: 'second-factor-required' as const, methods: ['totp', 'backup-code'] as const }
     }
-    forgetPrincipal(event)
-    await runtime.emit(systemEvent('authentication.signed-in', result.response.user.id, { method: 'password', client }))
+
+    const user = response.user!
+    // A user with TOTP who skipped the second factor did so on a remembered device.
+    const methods = user.twoFactorEnabled ? ['password', 'remembered-device'] as const : ['password'] as const
+    await completeSignIn(event, runtime, {
+      engineHeaders: result.headers,
+      sessionToken: response.token!,
+      userId: user.id,
+      methods,
+      previousToken,
+      account,
+      client,
+    })
     return { status: 'signed-in' as const }
   }
   catch (error) {
