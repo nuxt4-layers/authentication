@@ -2,23 +2,16 @@
 @import "@nuxt4-layers/theme-manager/presentation.css";
 @import "../../../../tailwind.css";
 
+
 /*
- * The host's palette. Theme Manager's default palette (at the pinned commit)
- * pairs pen-primary/fill-primary at 3.7:1 and pen-secondary/fill-secondary at
- * 3.4:1, and no edge role reaches 3:1 against the base surface. The host owns
- * its theme, so the playground composes these contrast-corrected values,
- * keeping the default hues. The e2e suite checks text and non-text contrast
- * in both modes against whatever palette is composed.
+ * Theme Manager's default theme (beb8b24) still pairs two dark-mode tokens
+ * below WCAG 2.2 AA against fill-base: pen-link (1.8:1) and edge-accent, the
+ * focus indicator (2.3:1). The playground composes corrected values, as a host
+ * would, until the default theme is fixed upstream. The e2e suite checks text
+ * and non-text contrast in both modes against whatever palette is composed.
  */
 :root {
-  --ui-pen-primary-default-light: #22302a;
-  --ui-pen-secondary-default-light: #3b2341;
-  --ui-edge-input-default-light: #767676;
-  --ui-edge-accent-default-light: #4a7253;
-  --ui-edge-error-default-light: #c53030;
-
-  --ui-pen-primary-default-dark: #102016;
-  --ui-pen-secondary-default-dark: #2a1530;
-  --ui-pen-muted-default-dark: #a3a3a3;
-  --ui-edge-input-default-dark: #8a8a8a;
+  --ui-pen-link-default-dark: #a5c6ad;
+  --ui-pen-link-hover-dark: #b6d3bd;
+  --ui-edge-accent-default-dark: #94b99d;
 }

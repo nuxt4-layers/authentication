@@ -4,7 +4,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.5.0, phase 5 (default pages).** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
+> **Status: 0.5.1, phase 6 (host integration) in progress.** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
 
 ## Bounded responsibility
 
@@ -137,7 +137,8 @@ The layer targets **OWASP ASVS 5.0 Level 2**, applying relevant Level 3 requirem
 ## Development
 
 ```bash
-pnpm install          # also runs nuxt prepare
+pnpm install
+pnpm dev:prepare      # generate Nuxt types (not run on install, so hosts installing from Git get runtime dependencies only)
 pnpm test             # Vitest (database suites need AUTHENTICATION_TEST_DATABASE_URL)
 pnpm typecheck        # nuxt typecheck (layer, shared, contracts, tests, playground)
 pnpm check            # typecheck + test
@@ -146,7 +147,7 @@ pnpm build:playground # production build of the playground
 pnpm test:e2e         # Playwright + axe against the built playground (needs AUTHENTICATION_TEST_DATABASE_URL)
 ```
 
-The playground composes Theme Manager, a private repository pinned by commit as a devDependency. Installing needs read access to `nuxt4-layers/theme-manager`; CI uses the `NUXT4_LAYERS_READ_TOKEN` secret. A small patch in `patches/` corrects an invalid token in Theme Manager's default theme until it is fixed upstream.
+The playground composes Theme Manager, a private repository pinned by commit as a devDependency. Contributors need read access to `nuxt4-layers/theme-manager`; CI uses the `NUXT4_LAYERS_READ_TOKEN` secret. Hosts installing the layer from Git do not: the package has no install-time scripts, so only its runtime dependencies are installed.
 
 Database and end-to-end suites run against a **disposable local PostgreSQL**, never a hosted one. Point `AUTHENTICATION_TEST_DATABASE_URL` at an admin connection (for example `postgres://postgres@localhost:5432/postgres`); each suite creates and drops its own database. Without it those suites are skipped locally and **fail in CI**.
 

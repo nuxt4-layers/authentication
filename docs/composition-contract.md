@@ -8,7 +8,7 @@ This document defines how a host Nuxt application composes the authentication ca
 
 Install through the package manager and compose the package root with Nuxt `extends`, following the Layer Consumption Workflow:
 
-- during early development, use a Git-backed dependency **pinned to a tag or commit SHA** in `package.json`;
+- during early development, use a Git-backed dependency **pinned to a tag or commit SHA** in `package.json`. The package runs no install-time scripts, so only its runtime dependencies are installed;
 - commit the lockfile and install with `--frozen-lockfile` in CI;
 - never follow a mutable default branch in production.
 

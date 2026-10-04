@@ -133,6 +133,11 @@ test.describe('default pages', () => {
         await expectAccessible(page)
         await expectNonTextContrast(page)
       }
+      // Hover changes fill and pen together, so contrast holds under the pointer.
+      await page.goto('/sign-in')
+      await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), mode === 'dark')
+      await page.getByRole('button', { name: 'Sign in', exact: true }).hover()
+      await expectAccessible(page)
     }
   })
 

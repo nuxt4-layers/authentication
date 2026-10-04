@@ -33,6 +33,13 @@ describe('Authentication repository foundation', () => {
     expect(pkg.devDependencies['@nuxt4-layers/theme-manager']).toMatch(/#[0-9a-f]{40}$/)
   })
 
+  it('runs no install-time scripts, so Git installs carry runtime dependencies only', () => {
+    // A prepare/install script makes pnpm install devDependencies (private Theme Manager) in every host.
+    for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack']) {
+      expect(pkg.scripts[hook], hook).toBeUndefined()
+    }
+  })
+
   it('declares database and mailer as required ports and the rest as optional', () => {
     const required = manifest.ports.filter((p: { optional: boolean }) => !p.optional).map((p: { port: string }) => p.port)
     expect(required).toEqual(['AuthenticationDatabase', 'AuthenticationMailer'])

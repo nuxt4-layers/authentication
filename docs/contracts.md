@@ -285,6 +285,8 @@ The components rely on these pairings meeting WCAG 2.2 AA in the host's theme, i
 - text: `pen-<role>` on `fill-<role>` for `primary`, `secondary`, `error`, `success` and `info`, and `pen-base`, `pen-muted` and `pen-link` on `fill-base`: at least 4.5:1;
 - non-text: `edge-input` and `edge-accent` (the focus indicator) against `fill-base` and `fill-floor`: at least 3:1.
 
+Components always pair a pen and fill of the same role and state (for example `pen-primary-hover` on `fill-primary-hover`), so these are the only combinations a theme must guarantee.
+
 ### Messages
 
 All text comes from the layer's en-GB catalogue, `AUTHENTICATION_MESSAGES_EN_GB` (exported from `./contracts`). Hosts override wording or add locales in `app.config.ts`:
