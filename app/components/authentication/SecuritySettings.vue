@@ -8,7 +8,7 @@ import type { AuthenticationResult, AuthenticationSessionSummary } from '../../.
  */
 const routes = useRuntimeConfig().public.authentication.routes
 const auth = useAuthentication()
-const { pending, error, submit, messageFor, minLength, t } = useAuthenticationForm()
+const { disabled, error, submit, messageFor, minLength, t } = useAuthenticationForm()
 const status = ref<string | null>(null)
 
 const { data, refresh } = await useAsyncData('authentication:security', async () => {
@@ -153,14 +153,14 @@ const federationNotice = computed(() => {
 
     <section v-if="data.accounts.password" aria-labelledby="authentication-password-title" :class="authenticationClasses.section">
       <h2 id="authentication-password-title" :class="authenticationClasses.sectionTitle">{{ t('authentication.security.password') }}</h2>
-      <form :class="authenticationClasses.stack" novalidate @submit.prevent="changePassword">
+      <form :class="authenticationClasses.stack" method="post" novalidate @submit.prevent="changePassword">
         <AuthenticationField id="authentication-current-password" v-model="current" type="password" autocomplete="current-password" :label="t('authentication.common.currentPassword')" />
         <AuthenticationField
           id="authentication-next-password" v-model="next" type="password" autocomplete="new-password"
           :minlength="minLength" :label="t('authentication.common.newPassword')" :hint="t('authentication.common.passwordHint', { min: minLength })"
         />
         <AuthenticationField id="authentication-confirm-next-password" v-model="confirm" type="password" autocomplete="new-password" :label="t('authentication.common.confirmPassword')" :error="mismatch" />
-        <button type="submit" :class="authenticationClasses.primaryButton" :disabled="pending">{{ t('authentication.security.changePassword') }}</button>
+        <button type="submit" :class="authenticationClasses.primaryButton" :disabled="disabled">{{ t('authentication.security.changePassword') }}</button>
       </form>
     </section>
 
@@ -172,8 +172,8 @@ const federationNotice = computed(() => {
         <p :class="authenticationClasses.muted">{{ t('authentication.security.backupRemaining', { count: data.mfa.backupCodes.remaining }) }}</p>
         <AuthenticationField v-if="data.accounts.password" id="authentication-factor-password" v-model="factorPassword" type="password" autocomplete="current-password" :label="t('authentication.common.password')" />
         <div :class="authenticationClasses.row">
-          <button type="button" :class="authenticationClasses.secondaryButton" :disabled="pending" @click="regenerateCodes">{{ t('authentication.security.backupRegenerate') }}</button>
-          <button type="button" :class="authenticationClasses.dangerButton" :disabled="pending" @click="disableTotp">{{ t('authentication.security.totpDisable') }}</button>
+          <button type="button" :class="authenticationClasses.secondaryButton" :disabled="disabled" @click="regenerateCodes">{{ t('authentication.security.backupRegenerate') }}</button>
+          <button type="button" :class="authenticationClasses.dangerButton" :disabled="disabled" @click="disableTotp">{{ t('authentication.security.totpDisable') }}</button>
         </div>
       </template>
       <template v-else>
@@ -188,15 +188,15 @@ const federationNotice = computed(() => {
       <ul v-if="data.mfa?.passkeys.length" :class="authenticationClasses.list">
         <li v-for="passkey in data.mfa.passkeys" :key="passkey.id" :class="authenticationClasses.listItem">
           <span :class="authenticationClasses.text">{{ passkey.name || t('authentication.security.passkeyUnnamed') }}</span>
-          <button type="button" :class="authenticationClasses.dangerButton" :disabled="pending" @click="removePasskey(passkey.id)">
+          <button type="button" :class="authenticationClasses.dangerButton" :disabled="disabled" @click="removePasskey(passkey.id)">
             {{ t('authentication.security.passkeyRemove', { name: passkey.name || t('authentication.security.passkeyUnnamed') }) }}
           </button>
         </li>
       </ul>
       <p v-else :class="authenticationClasses.muted">{{ t('authentication.security.noPasskeys') }}</p>
-      <form :class="[authenticationClasses.stack, 'mt-4']" novalidate @submit.prevent="addPasskey">
+      <form :class="[authenticationClasses.stack, 'mt-4']" method="post" novalidate @submit.prevent="addPasskey">
         <AuthenticationField id="authentication-new-passkey-name" v-model="passkeyName" :required="false" :maxlength="64" :label="t('authentication.mfa.passkeyName')" />
-        <button type="submit" :class="authenticationClasses.secondaryButton" :disabled="pending">{{ t('authentication.security.passkeyAdd') }}</button>
+        <button type="submit" :class="authenticationClasses.secondaryButton" :disabled="disabled">{{ t('authentication.security.passkeyAdd') }}</button>
       </form>
     </section>
 
@@ -205,10 +205,10 @@ const federationNotice = computed(() => {
       <ul :class="authenticationClasses.list">
         <li v-for="provider in data.providers" :key="provider.id" :class="authenticationClasses.listItem">
           <span :class="authenticationClasses.text">{{ linked(provider.id) ? t('authentication.security.providerLinked', { provider: provider.name }) : provider.name }}</span>
-          <button v-if="linked(provider.id)" type="button" :class="authenticationClasses.dangerButton" :disabled="pending" @click="unlink(provider.id)">
+          <button v-if="linked(provider.id)" type="button" :class="authenticationClasses.dangerButton" :disabled="disabled" @click="unlink(provider.id)">
             {{ t('authentication.security.providerUnlink', { provider: provider.name }) }}
           </button>
-          <button v-else type="button" :class="authenticationClasses.secondaryButton" :disabled="pending" @click="link(provider.id)">
+          <button v-else type="button" :class="authenticationClasses.secondaryButton" :disabled="disabled" @click="link(provider.id)">
             {{ t('authentication.security.providerLink', { provider: provider.name }) }}
           </button>
         </li>
@@ -224,13 +224,13 @@ const federationNotice = computed(() => {
             <strong v-if="session.current"> ({{ t('authentication.security.thisDevice') }})</strong>
             <span :class="['block', authenticationClasses.muted]">{{ t('authentication.security.lastActive', { time: formatter.format(new Date(session.lastActiveAt)) }) }}</span>
           </span>
-          <button v-if="!session.current" type="button" :class="authenticationClasses.secondaryButton" :disabled="pending" @click="revoke(session.sessionId)">
+          <button v-if="!session.current" type="button" :class="authenticationClasses.secondaryButton" :disabled="disabled" @click="revoke(session.sessionId)">
             {{ t('authentication.security.sessionRevoke', { device: session.clientDescription ?? t('authentication.security.unknownDevice') }) }}
           </button>
         </li>
       </ul>
       <div :class="[authenticationClasses.row, 'mt-4']">
-        <button v-if="data.sessions.length > 1" type="button" :class="authenticationClasses.secondaryButton" :disabled="pending" @click="revokeOthers">{{ t('authentication.security.sessionRevokeOthers') }}</button>
+        <button v-if="data.sessions.length > 1" type="button" :class="authenticationClasses.secondaryButton" :disabled="disabled" @click="revokeOthers">{{ t('authentication.security.sessionRevokeOthers') }}</button>
         <button type="button" :class="authenticationClasses.dangerButton" @click="signOut">{{ t('authentication.security.signOut') }}</button>
       </div>
     </section>
