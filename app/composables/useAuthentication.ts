@@ -38,6 +38,9 @@ export function useAuthentication() {
   const requiredLevel = useState<AuthenticationAssuranceLevel>('authentication:required-level', () => 'aal1')
   const ready = useState<boolean>('authentication:ready', () => false)
   const requestFetch = useRequestFetch()
+  // Untyped by route on purpose: Nitro's typed-route inference over a host's
+  // whole route table exceeds TypeScript's depth limit in larger compositions.
+  const fetchJson = requestFetch as unknown as <T>(url: string, options: { method: string, body?: Record<string, unknown> }) => Promise<T>
 
   async function refresh(): Promise<AuthenticatedPrincipal | null> {
     try {
@@ -55,7 +58,7 @@ export function useAuthentication() {
   async function call<T>(path: string, body?: Record<string, unknown>, method: 'POST' | 'GET' | 'DELETE' = 'POST'): Promise<AuthenticationResult<T>> {
     try {
       // useRequestFetch forwards the browser's cookie when this runs during SSR.
-      const data = await requestFetch(`${BASE}${path}`, { method, body }) as T
+      const data = await fetchJson<T>(`${BASE}${path}`, { method, body })
       return { ok: true, data }
     }
     catch (error) {
