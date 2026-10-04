@@ -3,7 +3,7 @@
 const route = useRoute()
 const routes = useRuntimeConfig().public.authentication.routes
 const auth = useAuthentication()
-const { pending, error, submit, minLength, t } = useAuthenticationForm()
+const { pending, disabled, error, submit, minLength, t } = useAuthenticationForm()
 const token = computed(() => (typeof route.query.token === 'string' ? route.query.token : ''))
 const password = ref('')
 const confirm = ref('')
@@ -26,7 +26,7 @@ async function reset() {
       <AuthenticationAlert v-if="error" tone="error" :title="t('authentication.common.errorSummary')">
         <p>{{ error }}</p>
       </AuthenticationAlert>
-      <form :class="authenticationClasses.stack" novalidate @submit.prevent="reset">
+      <form :class="authenticationClasses.stack" method="post" novalidate @submit.prevent="reset">
         <AuthenticationField
           id="authentication-new-password" v-model="password" type="password" autocomplete="new-password"
           :minlength="minLength" :label="t('authentication.common.newPassword')" :hint="t('authentication.common.passwordHint', { min: minLength })"
@@ -35,7 +35,7 @@ async function reset() {
           id="authentication-confirm-password" v-model="confirm" type="password" autocomplete="new-password"
           :label="t('authentication.common.confirmPassword')" :error="mismatch"
         />
-        <button type="submit" :class="authenticationClasses.primaryButton" :disabled="pending">
+        <button type="submit" :class="authenticationClasses.primaryButton" :disabled="disabled">
           {{ pending ? t('authentication.common.working') : t('authentication.resetPassword.submit') }}
         </button>
       </form>

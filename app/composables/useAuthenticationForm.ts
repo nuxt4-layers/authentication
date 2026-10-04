@@ -9,11 +9,16 @@ interface PublicPolicy {
 
 /**
  * PUBLIC. Shared state for the layer's forms: a pending flag, the current
- * error message, and the public policy for password guidance.
+ * error message, and the public policy for password guidance. `disabled` is
+ * also true until the component has hydrated, so a form can never be
+ * submitted natively (which would send its fields without the layer's checks).
  */
 export function useAuthenticationForm() {
   const { t } = useAuthenticationText()
   const pending = ref(false)
+  const hydrated = ref(false)
+  onMounted(() => { hydrated.value = true })
+  const disabled = computed(() => pending.value || !hydrated.value)
   const error = ref<string | null>(null)
   const { data: policy } = useFetch<PublicPolicy>('/api/authentication/policy', { key: 'authentication:policy', server: true, lazy: false })
   const minLength = computed(() => policy.value?.password.minLength ?? 15)
@@ -36,5 +41,5 @@ export function useAuthenticationForm() {
     }
   }
 
-  return { pending, error, policy, minLength, messageFor, submit, t }
+  return { pending, disabled, error, policy, minLength, messageFor, submit, t }
 }

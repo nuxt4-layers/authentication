@@ -8,7 +8,7 @@ import { safeRedirectPath } from '../../../shared/redirect'
 const route = useRoute()
 const routes = useRuntimeConfig().public.authentication.routes
 const auth = useAuthentication()
-const { pending, error, submit, t } = useAuthenticationForm()
+const { disabled, error, submit, t } = useAuthenticationForm()
 const redirect = computed(() => safeRedirectPath(route.query.redirect, routes.afterSignIn))
 
 const { data: state, refresh: reload } = await useAsyncData('authentication:mfa-state', async () => {
@@ -58,7 +58,7 @@ async function usePasskey() {
 
     <template v-else-if="passkeyCreated">
       <AuthenticationAlert tone="success"><p>{{ t('authentication.mfa.passkeyCreated') }}</p></AuthenticationAlert>
-      <button type="button" :class="authenticationClasses.primaryButton" :disabled="pending" @click="usePasskey">{{ t('authentication.mfa.passkeyUse') }}</button>
+      <button type="button" :class="authenticationClasses.primaryButton" :disabled="disabled" @click="usePasskey">{{ t('authentication.mfa.passkeyUse') }}</button>
     </template>
 
     <template v-else-if="state">
@@ -68,9 +68,9 @@ async function usePasskey() {
         <button type="button" :class="authenticationClasses.secondaryButton" @click="choice = 'passkey'">{{ t('authentication.mfa.choosePasskey') }}</button>
       </div>
       <AuthenticationTotpEnrolment v-else-if="choice === 'totp'" :requires-password="state.password" @enrolled="done" />
-      <form v-else :class="authenticationClasses.stack" novalidate @submit.prevent="createPasskey">
+      <form v-else :class="authenticationClasses.stack" method="post" novalidate @submit.prevent="createPasskey">
         <AuthenticationField id="authentication-passkey-name" v-model="passkeyName" :required="false" :maxlength="64" :label="t('authentication.mfa.passkeyName')" />
-        <button type="submit" :class="authenticationClasses.primaryButton" :disabled="pending">{{ t('authentication.mfa.passkeyCreate') }}</button>
+        <button type="submit" :class="authenticationClasses.primaryButton" :disabled="disabled">{{ t('authentication.mfa.passkeyCreate') }}</button>
       </form>
     </template>
   </div>

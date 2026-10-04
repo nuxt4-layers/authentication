@@ -8,7 +8,7 @@ import { renderSVG } from 'uqr'
 const props = defineProps<{ requiresPassword: boolean }>()
 const emit = defineEmits<{ enrolled: [] }>()
 const auth = useAuthentication()
-const { pending, error, submit, t } = useAuthenticationForm()
+const { disabled, error, submit, t } = useAuthenticationForm()
 
 const stage = ref<'password' | 'scan' | 'codes'>('password')
 const password = ref('')
@@ -43,12 +43,12 @@ onMounted(() => {
       <p>{{ error }}</p>
     </AuthenticationAlert>
 
-    <form v-if="stage === 'password' && requiresPassword" :class="authenticationClasses.stack" novalidate @submit.prevent="start">
+    <form v-if="stage === 'password' && requiresPassword" :class="authenticationClasses.stack" method="post" novalidate @submit.prevent="start">
       <AuthenticationField id="authentication-totp-password" v-model="password" type="password" autocomplete="current-password" :label="t('authentication.common.password')" />
-      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="pending">{{ t('authentication.common.continue') }}</button>
+      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="disabled">{{ t('authentication.common.continue') }}</button>
     </form>
 
-    <form v-else-if="stage === 'scan'" :class="authenticationClasses.stack" novalidate @submit.prevent="confirm">
+    <form v-else-if="stage === 'scan'" :class="authenticationClasses.stack" method="post" novalidate @submit.prevent="confirm">
       <p :class="authenticationClasses.text">{{ t('authentication.mfa.totpScan') }}</p>
       <!-- eslint-disable-next-line vue/no-v-html -- SVG generated locally from the server-issued provisioning URI -->
       <div class="mx-auto w-48 rounded-md bg-fill-base-default p-2" role="img" :aria-label="t('authentication.mfa.totpQrLabel')" v-html="qr" />
@@ -58,7 +58,7 @@ onMounted(() => {
       </p>
       <p :class="authenticationClasses.text">{{ t('authentication.mfa.totpConfirm') }}</p>
       <AuthenticationField id="authentication-totp-code" v-model="code" inputmode="numeric" autocomplete="one-time-code" :maxlength="6" :label="t('authentication.signIn.code')" />
-      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="pending">{{ t('authentication.signIn.verify') }}</button>
+      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="disabled">{{ t('authentication.signIn.verify') }}</button>
     </form>
 
     <AuthenticationBackupCodes v-else-if="stage === 'codes'" :codes="backupCodes" @saved="emit('enrolled')" />

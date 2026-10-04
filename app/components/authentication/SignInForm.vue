@@ -11,7 +11,7 @@ const emit = defineEmits<{ 'signed-in': [] }>()
 const route = useRoute()
 const routes = useRuntimeConfig().public.authentication.routes
 const auth = useAuthentication()
-const { pending, error, submit, t } = useAuthenticationForm()
+const { pending, disabled, error, submit, t } = useAuthenticationForm()
 
 const step = ref<'credentials' | 'second-factor'>('credentials')
 const method = ref<'totp' | 'backup-code'>('totp')
@@ -78,10 +78,10 @@ async function switchMethod() {
       <p>{{ error }}</p>
     </AuthenticationAlert>
 
-    <form v-if="step === 'credentials'" :class="authenticationClasses.stack" novalidate @submit.prevent="signIn">
+    <form v-if="step === 'credentials'" :class="authenticationClasses.stack" method="post" novalidate @submit.prevent="signIn">
       <AuthenticationField id="authentication-email" v-model="email" type="email" inputmode="email" autocomplete="username" :label="t('authentication.common.email')" />
       <AuthenticationField id="authentication-password" v-model="password" type="password" autocomplete="current-password" :label="t('authentication.common.password')" />
-      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="pending">
+      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="disabled">
         {{ pending ? t('authentication.common.working') : t('authentication.signIn.submit') }}
       </button>
       <p :class="authenticationClasses.muted">
@@ -89,7 +89,7 @@ async function switchMethod() {
       </p>
     </form>
 
-    <form v-else :class="authenticationClasses.stack" novalidate aria-labelledby="authentication-second-factor-title" @submit.prevent="verify">
+    <form v-else :class="authenticationClasses.stack" method="post" novalidate aria-labelledby="authentication-second-factor-title" @submit.prevent="verify">
       <h2 id="authentication-second-factor-title" :class="authenticationClasses.sectionTitle">{{ t('authentication.signIn.secondFactorTitle') }}</h2>
       <p :class="authenticationClasses.text">
         {{ method === 'totp' ? t('authentication.signIn.secondFactorIntro') : t('authentication.signIn.backupCodeIntro') }}
@@ -103,7 +103,7 @@ async function switchMethod() {
         :maxlength="method === 'totp' ? 6 : 32"
         :label="method === 'totp' ? t('authentication.signIn.code') : t('authentication.signIn.backupCode')"
       />
-      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="pending">
+      <button type="submit" :class="authenticationClasses.primaryButton" :disabled="disabled">
         {{ pending ? t('authentication.common.working') : t('authentication.signIn.verify') }}
       </button>
       <button type="button" :class="authenticationClasses.secondaryButton" @click="switchMethod">
@@ -115,7 +115,7 @@ async function switchMethod() {
       <p :class="authenticationClasses.divider" aria-hidden="true">
         <span class="h-px flex-1 bg-fill-muted-default" />{{ t('authentication.common.or') }}<span class="h-px flex-1 bg-fill-muted-default" />
       </p>
-      <button v-if="props.showPasskey" type="button" :class="[authenticationClasses.secondaryButton, 'w-full']" :disabled="pending" @click="passkey">
+      <button v-if="props.showPasskey" type="button" :class="[authenticationClasses.secondaryButton, 'w-full']" :disabled="disabled" @click="passkey">
         {{ t('authentication.signIn.passkey') }}
       </button>
       <AuthenticationProviderButtons v-if="props.showProviders" :redirect="redirect" />

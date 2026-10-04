@@ -133,6 +133,11 @@ test.describe('default pages', () => {
         await expectAccessible(page)
         await expectNonTextContrast(page)
       }
+      // Hover changes fill and pen together, so contrast holds under the pointer.
+      await page.goto('/sign-in')
+      await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), mode === 'dark')
+      await page.getByRole('button', { name: 'Sign in', exact: true }).hover()
+      await expectAccessible(page)
     }
   })
 
@@ -216,6 +221,41 @@ test.describe('default pages', () => {
     await enrolTotpThroughPage(page)
     await page.getByRole('button', { name: 'I have saved my backup codes' }).click()
     await expect(page).toHaveURL(`${ORIGIN}/`)
+  })
+
+  test('credentials never reach the URL, even before the page is interactive', async ({ browser }) => {
+    // Without JavaScript the page is as it is before hydration.
+    const context = await browser.newContext({ javaScriptEnabled: false })
+    const page = await context.newPage()
+    for (const path of ['/sign-in', '/sign-up', '/forgot-password', '/reset-password?token=example']) {
+      await page.goto(path)
+      for (const form of await page.locator('form').all()) {
+        await expect(form, path).toHaveAttribute('method', 'post')
+      }
+      await expect(page.locator('button[type="submit"]').first(), path).toBeDisabled()
+    }
+    await page.goto('/sign-in')
+    await page.getByLabel('Email address').fill('someone@example.com')
+    await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+    await page.getByLabel('Password', { exact: true }).press('Enter')
+    await page.waitForTimeout(500)
+    expect(page.url()).toBe(`${ORIGIN}/sign-in`)
+    await context.close()
+  })
+
+  test('what is typed before the page is interactive is kept and submitted', async ({ page }) => {
+    const email = await verifiedEmail(page)
+    // Hold the application's scripts back so typing happens before hydration.
+    await page.route('**/_nuxt/**/*.js', async (route) => {
+      await new Promise(resolve => setTimeout(resolve, 1_500))
+      await route.continue()
+    })
+    await page.goto('/sign-in?redirect=/protected', { waitUntil: 'commit' })
+    await page.getByLabel('Email address').fill(email)
+    await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click() // waits until enabled
+    await expect(page).toHaveURL(/\/mfa\?redirect=/)
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
   })
 
   test('the password field reveals and hides its value with a pressed state', async ({ page }) => {

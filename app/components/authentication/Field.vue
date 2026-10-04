@@ -24,6 +24,13 @@ const input = ref<HTMLInputElement | null>(null)
 const effectiveType = computed(() => (props.type === 'password' && revealed.value ? 'text' : props.type))
 const describedBy = computed(() => [props.hint && `${props.id}-hint`, props.error && `${props.id}-error`].filter(Boolean).join(' ') || undefined)
 
+// Keep what was typed or autofilled before hydration: v-model would otherwise
+// overwrite the server-rendered input with the empty initial value.
+onBeforeMount(() => {
+  const early = (document.getElementById(props.id) as HTMLInputElement | null)?.value
+  if (early && !model.value) model.value = early
+})
+
 defineExpose({ focus: () => input.value?.focus() })
 </script>
 
