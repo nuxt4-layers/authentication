@@ -280,7 +280,7 @@ The components rely on the presentation capability's theme meeting WCAG 2.2 AA f
 - text: `pen-<role>` on `fill-<role>` for `primary`, `secondary`, `error`, `success` and `info`, and `pen-base`, `pen-muted` and `pen-link` on `fill-base`: at least 4.5:1;
 - non-text: `edge-input` and `edge-accent` (the focus indicator) against `fill-base` and `fill-floor`: at least 3:1.
 
-Components always pair a pen and fill of the same role and state (for example `pen-primary-hover` on `fill-primary-hover`), so these are the only combinations a theme must guarantee. The end-to-end suite checks them against Theme Manager's default theme.
+Composition follows Theme Manager's semantic presentation guide (`docs/semantic-presentation-guide.md` in Theme Manager): a control's edge, fill and pen share one role and advance together through default, hover, active and disabled, and `tests/presentation-grammar.test.ts` enforces it. Cross-role uses are deliberate and limited to: muted, link and error text on the base surface; an invalid input's error edge; and the `edge-accent` focus indicator. The end-to-end suite then checks the rendered result for contrast against Theme Manager's default theme.
 
 ### Messages
 
