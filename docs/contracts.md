@@ -5,7 +5,7 @@
 
 ## 1. Purpose
 
-The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, `@nuxt4-layers/authentication/tailwind.css` (a Tailwind source declaration, §11), the server composition functions listed in §6, and the default pages, components, composables and messages listed in §9 and §11.
+The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, the server composition functions listed in §6, and the default pages, components, composables and messages listed in §9 and §11.
 
 Consumers MUST NOT import any other path. The authentication engine, database schema, server utilities and HTTP handler internals are private and may change without a major release.
 
@@ -273,19 +273,14 @@ Auto-imported with the `Authentication` prefix, for hosts that build their own p
 
 ### Styling
 
-The components use only `SemanticPresentationTheme` utilities (`bg-fill-*`, `text-pen-*`, `border-edge-*`, `outline-edge-*` and Tailwind's size, spacing and radius scales). A host composing Theme Manager adds the layer's sources to its own Tailwind entry so the utilities are generated:
+The components use only the `SemanticPresentationTheme` grammar: the `fill-*`, `pen-*` and `edge-*` colour roles and states, and Theme Manager's text, weight, radius and spacing scales. No utility falls back to Tailwind's own defaults, and `tests/presentation-grammar.test.ts` compiles every class against Theme Manager's public `presentation.css` to keep it so. The layer ships no CSS and asks the host for none: the presentation capability (Theme Manager) supplies the vocabulary and its values. The host writes no theme values or overrides.
 
-```css
-@import "@nuxt4-layers/theme-manager/presentation.css";
-@import "@nuxt4-layers/authentication/tailwind.css";
-```
-
-The components rely on these pairings meeting WCAG 2.2 AA in the host's theme, in both light and dark mode:
+The components rely on the presentation capability's theme meeting WCAG 2.2 AA for these pairings, in both light and dark mode:
 
 - text: `pen-<role>` on `fill-<role>` for `primary`, `secondary`, `error`, `success` and `info`, and `pen-base`, `pen-muted` and `pen-link` on `fill-base`: at least 4.5:1;
 - non-text: `edge-input` and `edge-accent` (the focus indicator) against `fill-base` and `fill-floor`: at least 3:1.
 
-Components always pair a pen and fill of the same role and state (for example `pen-primary-hover` on `fill-primary-hover`), so these are the only combinations a theme must guarantee.
+Components always pair a pen and fill of the same role and state (for example `pen-primary-hover` on `fill-primary-hover`), so these are the only combinations a theme must guarantee. The end-to-end suite checks them against Theme Manager's default theme.
 
 ### Messages
 

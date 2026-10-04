@@ -1,6 +1,6 @@
 {
   "name": "@nuxt4-layers/authentication",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Nuxt 4 foundation capability that establishes who has signed in and manages the secure lifecycle of the authenticated session.",
@@ -12,8 +12,7 @@
   "exports": {
     ".": "./nuxt.config.ts",
     "./contracts": "./contracts/index.ts",
-    "./capability": "./capability.json",
-    "./tailwind.css": "./tailwind.css"
+    "./capability": "./capability.json"
   },
   "files": [
     "app",
@@ -24,8 +23,7 @@
     "nuxt.config.ts",
     "README.md",
     "LICENSE",
-    "modules",
-    "tailwind.css"
+    "modules"
   ],
   "scripts": {
     "dev:prepare": "nuxt prepare",
@@ -53,7 +51,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@nuxt/test-utils": "^4.3.3",
-    "@nuxt4-layers/theme-manager": "github:nuxt4-layers/theme-manager#beb8b24ea663ecf88c12685a77a93ca0a9fe12f8",
+    "@nuxt4-layers/theme-manager": "github:nuxt4-layers/theme-manager#902ed58140452f5a0c3fbd22f3e9d2481ed99655",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.6",

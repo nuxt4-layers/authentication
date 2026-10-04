@@ -9,7 +9,7 @@ Each phase is delivered as its own pull request with tests, and keeps `pnpm chec
 | 3. Multi-factor | TOTP with backup codes, passkeys, step-up and re-authentication, MFA-required enrolment flow | Complete |
 | 4. Federation | Google, Microsoft, GitHub, Facebook and generic OIDC; explicit linking by provider subject only; verified-email account creation; provider tokens discarded | Complete |
 | 5. Default pages | Accessible (WCAG 2.2 AA), localisable pages and reusable form components styled only through the `SemanticPresentationTheme` vocabulary; host-configurable paths, can be disabled; Playwright and axe end-to-end tests | Complete |
-| 6. Host integration | Composition into `platform-test-harness` beside Theme Manager and Nuxt UI, with host adapters, principal-to-actor mapping and negative tests; Git installs carry runtime dependencies only | In progress |
+| 6. Host integration | Composition into `platform-test-harness` beside Theme Manager and Nuxt UI, with host adapters, principal-to-actor mapping and negative tests; Git installs carry runtime dependencies only | Complete |
 
 ## Testing infrastructure by phase
 

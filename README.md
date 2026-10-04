@@ -4,7 +4,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.5.1, phase 6 (host integration) in progress.** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
+> **Status: 0.6.0, phase 6 (host integration) complete.** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
 
 ## Bounded responsibility
 
@@ -25,7 +25,6 @@ Authentication is **tenant-agnostic**. It publishes one fact, the `Authenticated
 @nuxt4-layers/authentication              Nuxt layer (compose with extends)
 @nuxt4-layers/authentication/contracts    Types, error codes, events, policy, port interfaces
 @nuxt4-layers/authentication/capability   Capability manifest
-@nuxt4-layers/authentication/tailwind.css  Tailwind sources for the default pages
 ```
 
 The layer also provides these, auto-imported for the host:
@@ -105,14 +104,9 @@ export default defineNuxtConfig({
 })
 ```
 
-They are styled only through the `SemanticPresentationTheme` vocabulary (Theme Manager), an optional capability. Add the layer's sources to your Tailwind entry so the utilities are generated:
+They are styled only through the `SemanticPresentationTheme` grammar, an optional capability supplied by Theme Manager. The layer ships no CSS and the host writes none: compose Theme Manager and the pages take its vocabulary and values.
 
-```css
-@import "@nuxt4-layers/theme-manager/presentation.css";
-@import "@nuxt4-layers/authentication/tailwind.css";
-```
-
-Your theme must meet the contrast pairings in [docs/contracts.md](docs/contracts.md) §11. Override text or add locales in `app.config.ts` under `authentication.messages`.
+The pages rely on the theme meeting the contrast pairings in [docs/contracts.md](docs/contracts.md) §11. Override text or add locales in `app.config.ts` under `authentication.messages`.
 
 See [docs/composition-contract.md](docs/composition-contract.md) for the full contract, including persistence ([ADR-0002](https://github.com/nuxt4-layers/platform-architecture/blob/main/docs/decisions/ADR-0002-composition-supplied-persistence-and-capability-owned-schemas.md)) and configuration.
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "name": "@nuxt4-layers/authentication",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "classification": "foundation",
   "provides": [
     {
@@ -20,8 +20,7 @@
   "publicExports": [
     ".",
     "./contracts",
-    "./capability",
-    "./tailwind.css"
+    "./capability"
   ],
   "ports": [
     {
