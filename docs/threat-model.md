@@ -109,11 +109,15 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | T10 Identity already linked elsewhere cannot be relinked; last sign-in method cannot be unlinked | Implemented (phase 4) | `tests/integration/federation.test.ts` |
 | Provider tokens discarded (the engine would keep OIDC ID tokens in plain text) | Implemented (phase 4) | `tests/integration/federation.test.ts` |
 | Provider MFA not trusted: provider sign-ins are aal1 and step up locally | Implemented (phase 4) | `tests/integration/federation.test.ts` |
+| T14 Actions pinned to commit SHAs; workflow token read-only; CI holds no secrets | Implemented (phase 6) | `.github/workflows/quality.yml` (review), `docs/repository-security.md` |
+| T14 Install scripts allow-listed; dependencies at least a day old; registry-only transitive dependencies; Dependabot with cooldown; dependency review on pull requests | Implemented (phase 6) | `pnpm-workspace.yaml`, `.github/dependabot.yml`, `.github/workflows/dependency-review.yml` |
+| T14 Repository settings (rulesets, code owners, secret scanning with push protection, CodeQL, private vulnerability reporting) | Checklist (phase 6) | `docs/repository-security.md` |
 | T16 Default pages refuse framing, caching and referrer leakage | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 | T16 Credentials never reach a URL: forms use `method="post"` and stay disabled until hydrated, so no native (GET) submission can happen. Found by host composition, where slower hydration let a sign-in submit as GET | Implemented (phase 6) | `tests/e2e/pages.spec.ts` |
 | T16 TOTP QR code rendered in the browser from the provisioning URI; no third-party QR service | Implemented (phase 5) | `app/components/authentication/TotpEnrolment.vue` (review) |
 | Default pages: sign-in returns only to same-origin paths | Implemented (phase 5) | `tests/e2e/pages.spec.ts`, `tests/internals.test.ts` |
 | Default pages: automated WCAG 2.2 AA rules (axe) in light and dark mode, non-text contrast, 320px reflow, keyboard-only journey, announced and focused errors | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
+| Default pages follow Theme Manager's semantic presentation grammar: same-role, same-state Fill/Pen/Edge, documented deliberate pairings, no private theme variables | Implemented (phase 6) | `tests/presentation.test.ts` |
 | Default pages: password managers supported (`autocomplete` `username` or `email`, `current-password`, `new-password`, `one-time-code`; paste allowed; show-password toggle) | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 
 ### ASVS 5.0 mapping (by section)
@@ -143,4 +147,4 @@ This maps controls to OWASP ASVS 5.0 chapters and sections. Requirement-level id
 | Only one generic OIDC provider per deployment | Several enterprise IdPs need separate deployments | Revisit when a host needs more than one. |
 | Passkeys need a registrable domain as the relying-party ID | IP-address origins cannot use passkeys in browsers | Production base URLs use a domain. Tests use a software authenticator. |
 | Automated accessibility checks cover only part of WCAG 2.2 AA | Issues axe cannot detect (reading order, meaningful text, screen-reader announcements in context, cognitive load) may remain | Keyboard, focus and announcement journeys are tested in a browser. A manual audit with screen readers (NVDA, VoiceOver) is an open action before 1.0. |
-| Contrast depends on the host's theme | Theme Manager's default theme (beb8b24) meets AA for its pen/fill pairs, but in dark mode `pen-link` (1.8:1) and `edge-accent`, the focus indicator (2.3:1), fail against `fill-base` | The required pairings are documented in `docs/contracts.md` §11, and components pair pen and fill of the same state (hover with hover). The playground overrides the two dark tokens. Open action: fix them in Theme Manager. |
+| Contrast depends on the host's theme | A user-defined Theme Manager theme can pair colours below WCAG 2.2 AA; Theme Manager validates structure, not contrast | Components use only same-role pairings, which Theme Manager's default theme guarantees, plus four documented deliberate pairings (`docs/contracts.md`, Styling). The end-to-end suite checks rendered contrast against the unmodified default theme. Hosts that allow custom themes own their contrast review. |

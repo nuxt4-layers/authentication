@@ -273,19 +273,25 @@ Auto-imported with the `Authentication` prefix, for hosts that build their own p
 
 ### Styling
 
-The components use only `SemanticPresentationTheme` utilities (`bg-fill-*`, `text-pen-*`, `border-edge-*`, `outline-edge-*` and Tailwind's size, spacing and radius scales). A host composing Theme Manager adds the layer's sources to its own Tailwind entry so the utilities are generated:
+The components use only `SemanticPresentationTheme` utilities (`bg-fill-*`, `text-pen-*`, `border-edge-*`, `divide-edge-*`, `outline-edge-*` and Tailwind's size, spacing and radius scales). A host composing Theme Manager adds the layer's sources to its own Tailwind entry so the utilities are generated:
 
 ```css
 @import "@nuxt4-layers/theme-manager/presentation.css";
 @import "@nuxt4-layers/authentication/tailwind.css";
 ```
 
-The components rely on these pairings meeting WCAG 2.2 AA in the host's theme, in both light and dark mode:
+The components follow Theme Manager's [Semantic Presentation Guide](https://github.com/nuxt4-layers/theme-manager/blob/master/docs/semantic-presentation-guide.md): tokens are chosen by meaning, and the Fill, Pen and Edge of one surface or control share a role and a state and change state together (hover with hover, disabled with disabled). Text without a fill of its own sits on the card, `fill-base-default`. Links are link-role surfaces (`pen-link` on `fill-link`, underlined), and the keyboard focus indicator is the card's own edge in its active state. Components never set Theme Manager's private `--ui-*` or `--api-*` variables, and neither should a host: a theme that falls short is corrected in its Theme Definition.
 
-- text: `pen-<role>` on `fill-<role>` for `primary`, `secondary`, `error`, `success` and `info`, and `pen-base`, `pen-muted` and `pen-link` on `fill-base`: at least 4.5:1;
-- non-text: `edge-input` and `edge-accent` (the focus indicator) against `fill-base` and `fill-floor`: at least 3:1.
+Beyond Theme Manager's same-role guarantees, the components use these deliberate pairings, which a host's theme must keep at WCAG 2.2 AA in light and dark mode:
 
-Components always pair a pen and fill of the same role and state (for example `pen-primary-hover` on `fill-primary-hover`), so these are the only combinations a theme must guarantee.
+| Pairing | Purpose | Minimum |
+|---|---|---|
+| `pen-muted-default` on `fill-base-default` | Hints, notes and the "or" divider | 4.5:1 |
+| `pen-error-default` on `fill-base-default` | A field's error message | 4.5:1 |
+| `edge-error-default` on `fill-input-default` | An invalid field's border | 3:1 |
+| `edge-base-active` on `fill-base-default` | Keyboard focus indicator | 3:1 |
+
+`tests/presentation.test.ts` enforces the pairing rules, and the end-to-end suite checks rendered contrast with Theme Manager's default theme, unmodified.
 
 ### Messages
 

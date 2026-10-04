@@ -6,9 +6,10 @@ Governed by `nuxt4-layers/platform-architecture`; persistence follows ADR-0002.
 Better Auth is the private engine (from phase 2) and must never appear in `contracts/` or `shared/`.
 
 ## Commands
-- `pnpm install`, then `pnpm dev:prepare` for Nuxt types. Never add a `prepare`/`postinstall` script: Git installs would then pull devDependencies (private Theme Manager) into hosts
+- `pnpm install`, then `pnpm dev:prepare` for Nuxt types. Never add a `prepare`/`postinstall` script: Git installs would then pull devDependencies (Theme Manager, Playwright) into hosts
 - `pnpm check` = `nuxt typecheck` + `vitest run`; run it after every code change
 - `pnpm build:playground` proves the layer composes in a host
+- Theme Manager is pinned as `git+https://github.com/...#<sha>`; the lockfile must not record `git@github.com` (CI has no SSH key). Cloud sessions inject SSH-to-HTTPS rewrites that make pnpm pick SSH: re-resolve with `GIT_CONFIG_COUNT=1 pnpm install`
 - Single test file: `pnpm vitest run tests/<name>.test.ts`
 - Database and end-to-end suites need `AUTHENTICATION_TEST_DATABASE_URL` (admin URL of a local, disposable PostgreSQL). They skip locally without it and fail in CI.
 - End-to-end: `pnpm test:e2e` (builds the playground, then Playwright). Locally, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if Playwright's own browser is not installed.
@@ -27,7 +28,7 @@ Better Auth is the private engine (from phase 2) and must never appear in `contr
 - No secrets, codes, tokens or email addresses in events or logs.
 - Defaults are secure; loosening policy requires a documented risk treatment.
 - Keep `docs/contracts.md`, `docs/threat-model.md` (control register) and `docs/roadmap.md` in step with code.
-- Default pages and components style only through the SemanticPresentationTheme vocabulary (`authenticationClasses`), never raw colours; text comes from `shared/messages.ts` via `useAuthenticationText()`. Keep every component in `tailwind.css` source paths.
-- Never weaken an axe or contrast assertion to get green: fix the component, or (for palette values) the host theme in the playground, and report Theme Manager palette issues upstream.
+- Default pages and components style only through the SemanticPresentationTheme vocabulary (`authenticationClasses`), never raw colours, following Theme Manager's Semantic Presentation Guide: Fill/Pen/Edge of one surface share role and state; any other pairing goes in `DELIBERATE_PAIRINGS` and `docs/contracts.md`. Text comes from `shared/messages.ts` via `useAuthenticationText()`. Keep every component in `tailwind.css` source paths.
+- Never weaken an axe or contrast assertion to get green. Fix the component's semantic composition first; a genuine palette defect is fixed in Theme Manager, never by setting its private `--ui-*` variables here or in the playground.
 - Client calls that may run during SSR must use `useRequestFetch()` so the session cookie is forwarded.
 - Package manager: pnpm. Commit `pnpm-lock.yaml`.
