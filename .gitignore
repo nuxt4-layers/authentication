@@ -97,8 +97,7 @@
 **/temp/
 
 # Logs (Catching stray logs, dedicated tool logs are handled in respective sections)
-logs
-*.log                   # Catch stray root-level logs
+**/logs/
 **/*.log                # Catch logs anywhere (redundant but defensive)
 
 # Generic temp files
@@ -196,11 +195,14 @@ powershell/output/
 !.firebase                              # Keep configuration file (from .gitignore)
 !.firebaserc                            # Keep configuration file (from .gitignore)
 !firebase.json                          # Keep configuration file (from .gitignore)
-# Keep generated import scripts (from .gitignore)
+
+# Keep Firebase generated import scripts (from .gitignore)
 !firebase/generated_scripts/importData.cjs
 !firebase/generated_scripts/importAuthUsers.cjs
 **/firebase-debug.log*
-**/firebase/functions/package-lock.json # NPM lock (ignored when pnpm is standard)
+
+# Firebase NPM lock (ignored when pnpm is standard)
+**/firebase/functions/package-lock.json
 
 # Appwrite emulator
 **/apphosting.emulator.yaml
