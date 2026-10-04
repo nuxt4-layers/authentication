@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import * as contracts from '../contracts'
+import * as presentation from '../presentation'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -17,15 +18,25 @@ describe('Authentication public contract', () => {
       'AUTHENTICATION_ERROR_CODES',
       'AUTHENTICATION_ERROR_STATUS',
       'AUTHENTICATION_EVENT_TYPES',
-      'AUTHENTICATION_MESSAGES_EN_GB',
       'AUTHENTICATION_MESSAGE_KINDS',
       'AuthenticationCompositionError',
       'DEFAULT_AUTHENTICATION_POLICY',
-      'formatMessage',
       'isAuthenticationErrorCode',
+      'publicAuthenticationPolicy',
       'resolveAuthenticationPolicy',
+      'safeRedirectPath',
+    ])
+  })
+
+  it('keeps presentation out of the contract', () => {
+    expect(Object.keys(presentation).sort()).toEqual([
+      'AUTHENTICATION_MESSAGES_EN_GB',
+      'DELIBERATE_PAIRINGS',
+      'authenticationClasses',
+      'formatMessage',
       'resolveMessage',
     ])
+    for (const name of Object.keys(presentation)) expect(contracts, name).not.toHaveProperty(name)
   })
 
   it('imports nothing but zod and its own shared modules', () => {
@@ -74,31 +85,31 @@ describe('Authentication public contract', () => {
 describe('Authentication message catalogue', () => {
   it('has an en-GB message for every error code', () => {
     for (const code of contracts.AUTHENTICATION_ERROR_CODES) {
-      expect(contracts.AUTHENTICATION_MESSAGES_EN_GB, code).toHaveProperty(`authentication.error.${code}`)
+      expect(presentation.AUTHENTICATION_MESSAGES_EN_GB, code).toHaveProperty(`authentication.error.${code}`)
     }
   })
 
   it('has a message for every federation outcome', () => {
     for (const outcome of ['cancelled', 'link-required', 'link-failed', 'failed']) {
-      expect(contracts.AUTHENTICATION_MESSAGES_EN_GB).toHaveProperty(`authentication.federation.${outcome}`)
+      expect(presentation.AUTHENTICATION_MESSAGES_EN_GB).toHaveProperty(`authentication.federation.${outcome}`)
     }
   })
 
   it('prefers host overrides for the active locale, then en-GB, then the key', () => {
     const overrides = { 'cy-GB': { 'authentication.signIn.title': 'Mewngofnodi' } }
-    expect(contracts.resolveMessage('authentication.signIn.title', 'cy-GB', overrides)).toBe('Mewngofnodi')
-    expect(contracts.resolveMessage('authentication.signUp.title', 'cy-GB', overrides)).toBe('Create an account')
-    expect(contracts.resolveMessage('authentication.unknown.key', 'en-GB', undefined)).toBe('authentication.unknown.key')
+    expect(presentation.resolveMessage('authentication.signIn.title', 'cy-GB', overrides)).toBe('Mewngofnodi')
+    expect(presentation.resolveMessage('authentication.signUp.title', 'cy-GB', overrides)).toBe('Create an account')
+    expect(presentation.resolveMessage('authentication.unknown.key', 'en-GB', undefined)).toBe('authentication.unknown.key')
   })
 
   it('fills placeholders and leaves unknown ones visible', () => {
-    expect(contracts.formatMessage('At least {min} characters', { min: 15 })).toBe('At least 15 characters')
-    expect(contracts.formatMessage('Hello {name}')).toBe('Hello {name}')
+    expect(presentation.formatMessage('At least {min} characters', { min: 15 })).toBe('At least 15 characters')
+    expect(presentation.formatMessage('Hello {name}')).toBe('Hello {name}')
   })
 
   it('uses only placeholders that the components supply', () => {
     const allowed = new Set(['min', 'email', 'provider', 'count', 'name', 'time', 'device'])
-    for (const [key, template] of Object.entries(contracts.AUTHENTICATION_MESSAGES_EN_GB)) {
+    for (const [key, template] of Object.entries(presentation.AUTHENTICATION_MESSAGES_EN_GB)) {
       for (const [, name] of template.matchAll(/\{(\w+)\}/g)) expect(allowed, `${key} uses {${name}}`).toContain(name)
     }
   })

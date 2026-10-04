@@ -4,7 +4,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.5.1, phase 6 (host integration) in progress.** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
+> **Status: 0.6.0, phase 6 (host integration) in progress.** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
 
 ## Bounded responsibility
 
@@ -25,15 +25,18 @@ Authentication is **tenant-agnostic**. It publishes one fact, the `Authenticated
 @nuxt4-layers/authentication              Nuxt layer (compose with extends)
 @nuxt4-layers/authentication/contracts    Types, error codes, events, policy, port interfaces
 @nuxt4-layers/authentication/capability   Capability manifest
+@nuxt4-layers/authentication/presentation  Page text catalogue and styling classes
 @nuxt4-layers/authentication/tailwind.css  Tailwind sources for the default pages
 ```
+
+The layer has three parts with one-way dependencies: the **contract** (plain TypeScript), the **core** (server, endpoints, client API, middleware) and an optional **presentation** (pages, components, text, styling) that uses only the contract and the client API. See [docs/architecture.md](docs/architecture.md).
 
 The layer also provides these, auto-imported for the host:
 
 - **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `migrateAuthenticationDatabase`.
 - **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`. The latter requires aal2 by default while MFA is required.
-- **Client:** the `useAuthentication()` composable, and the `authenticated`, `guest` and `authentication-signed-in` route middleware.
-- **Pages and components:** default sign-in, sign-up, password recovery, MFA and security pages at configurable paths, the `Authentication*` form components they are built from, `useAuthenticationText()` and the en-GB message catalogue.
+- **Client:** the `useAuthentication()` and `useAuthenticationPublicPolicy()` composables, and the `authenticated`, `guest` and `authentication-signed-in` route middleware.
+- **Presentation (optional):** default sign-in, sign-up, password recovery, MFA and security pages at configurable paths, the `Authentication*` form components they are built from, `useAuthenticationText()` and the en-GB message catalogue. `authentication: { presentation: false }` registers none of it.
 - **HTTP:** endpoints under `/api/authentication/*`.
 
 Every other path is private. See [docs/contracts.md](docs/contracts.md).
@@ -105,6 +108,8 @@ export default defineNuxtConfig({
 })
 ```
 
+A host with its own design sets `authentication: { presentation: false }`: no pages, components or presentation auto-imports are registered, and the core works unchanged.
+
 They are styled only through the `SemanticPresentationTheme` vocabulary (Theme Manager), an optional capability. Add the layer's sources to your Tailwind entry so the utilities are generated:
 
 ```css
@@ -153,6 +158,7 @@ Database and end-to-end suites run against a **disposable local PostgreSQL**, ne
 
 ## Documentation
 
+- [Architecture](docs/architecture.md)
 - [Public contract](docs/contracts.md)
 - [Composition contract](docs/composition-contract.md)
 - [Threat model](docs/threat-model.md)

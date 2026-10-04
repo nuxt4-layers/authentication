@@ -1,5 +1,5 @@
 import { defineNuxtRouteMiddleware, navigateTo, useRuntimeConfig } from '#imports'
-import { safeRedirectPath } from '../../shared/redirect'
+import { safeRedirectPath } from '../../contracts'
 import { useAuthentication } from '../composables/useAuthentication'
 
 /** PUBLIC named route middleware for sign-in and sign-up pages: signed-in users are sent on. */

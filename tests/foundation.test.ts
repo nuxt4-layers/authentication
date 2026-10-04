@@ -13,11 +13,12 @@ describe('Authentication repository foundation', () => {
     expect(manifest.classification).toBe('foundation')
   })
 
-  it('publishes deliberate root, contracts and capability entry points', () => {
+  it('publishes deliberate root, contract, capability and presentation entry points', () => {
     expect(pkg.exports).toEqual({
       '.': './nuxt.config.ts',
       './contracts': './contracts/index.ts',
       './capability': './capability.json',
+      './presentation': './presentation/index.ts',
       './tailwind.css': './tailwind.css',
     })
     expect(manifest.publicExports).toEqual(Object.keys(pkg.exports))

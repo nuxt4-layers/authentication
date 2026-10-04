@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { safeRedirectPath } from '../../../shared/redirect'
+import { safeRedirectPath } from '../../contracts'
 
 /**
  * PUBLIC. Brings a session up to the required assurance: steps up with an

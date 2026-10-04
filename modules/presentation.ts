@@ -1,13 +1,15 @@
-import { createResolver, defineNuxtModule, extendPages } from '@nuxt/kit'
+import { addComponentsDir, addImportsDir, createResolver, defineNuxtModule, extendPages } from '@nuxt/kit'
 
 /**
- * Registers the layer's default pages at host-chosen paths (build time) and
- * keeps the runtime route configuration in step, so links, redirects and
- * emails point at the pages that exist.
+ * Registers the layer's presentation: the default pages, the `Authentication*`
+ * form components and the presentation auto-imports (`useAuthenticationText`,
+ * `useAuthenticationForm`, `authenticationClasses`). The core (server, client
+ * API and route middleware) never depends on any of it.
  *
  * Hosts configure it in nuxt.config.ts:
- *   authentication: { pages: { enabled: true, paths: { signIn: '/login' } } }
- * or set `enabled: false` and build their own pages from the public form components.
+ *   authentication: { pages: { paths: { signIn: '/login' } } }  // move the pages
+ *   authentication: { pages: { enabled: false } }               // own pages, keep the components
+ *   authentication: { presentation: false }                     // core only: register nothing here
  */
 export interface AuthenticationPagePaths {
   signIn: string
@@ -19,6 +21,8 @@ export interface AuthenticationPagePaths {
 }
 
 export interface AuthenticationModuleOptions {
+  /** `false` registers no pages, components or presentation auto-imports. */
+  presentation: boolean
   pages: {
     enabled: boolean
     paths: AuthenticationPagePaths
@@ -35,8 +39,9 @@ const PAGES: { key: keyof AuthenticationPagePaths, file: string }[] = [
 ]
 
 export default defineNuxtModule<AuthenticationModuleOptions>({
-  meta: { name: '@nuxt4-layers/authentication/pages', configKey: 'authentication' },
+  meta: { name: '@nuxt4-layers/authentication/presentation', configKey: 'authentication' },
   defaults: {
+    presentation: true,
     pages: {
       enabled: true,
       paths: {
@@ -50,12 +55,25 @@ export default defineNuxtModule<AuthenticationModuleOptions>({
     },
   },
   setup(options, nuxt) {
+    if (!options.presentation) return
+
+    const { resolve } = createResolver(import.meta.url)
+    addComponentsDir({ path: resolve('../presentation/components'), prefix: 'Authentication', pathPrefix: false })
+    addImportsDir([resolve('../presentation/composables'), resolve('../presentation/utils')])
+    // Type-check the presentation sources with the host's app code.
+    nuxt.hook('prepare:types', ({ tsConfig }) => {
+      const include = (tsConfig.include ??= [])
+      include.push(resolve('../presentation/**/*'))
+    })
+
     if (!options.pages.enabled) return
     for (const [key, path] of Object.entries(options.pages.paths)) {
       if (!path.startsWith('/') || path.startsWith('//')) {
         throw new Error(`authentication.pages.paths.${key} must be an absolute path, got '${path}'.`)
       }
     }
+    // Route configuration belongs to the core; the pages tell it where they are,
+    // so the core's links, redirects and emails point at pages that exist.
     const runtimeRoutes = (nuxt.options.runtimeConfig.public as { authentication: { routes: Record<string, string> } }).authentication.routes
     Object.assign(runtimeRoutes, options.pages.paths)
 
@@ -74,13 +92,12 @@ export default defineNuxtModule<AuthenticationModuleOptions>({
       }
     }
 
-    const { resolve } = createResolver(import.meta.url)
     extendPages((pages) => {
       for (const page of PAGES) {
         pages.push({
           name: `authentication-${page.key}`,
           path: options.pages.paths[page.key],
-          file: resolve('../app/authentication-pages', page.file),
+          file: resolve('../presentation/pages', page.file),
         })
       }
     })

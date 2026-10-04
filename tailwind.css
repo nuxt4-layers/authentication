@@ -9,6 +9,6 @@
  *   @import "@nuxt4-layers/theme-manager/presentation.css";
  *   @import "@nuxt4-layers/authentication/tailwind.css";
  */
-@source "./app/components";
-@source "./app/authentication-pages";
-@source "./app/utils";
+@source "./presentation/components";
+@source "./presentation/pages";
+@source "./presentation/utils";

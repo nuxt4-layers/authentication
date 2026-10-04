@@ -2,7 +2,7 @@ import { globSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { authenticationClasses, DELIBERATE_PAIRINGS } from '../app/utils/authentication-classes'
+import { authenticationClasses, DELIBERATE_PAIRINGS } from '../presentation/utils/authentication-classes'
 
 /**
  * Theme Manager's Semantic Presentation Guide: Fill, Pen and Edge of one
@@ -73,7 +73,7 @@ describe('semantic presentation', () => {
     const files = [
       'tailwind.css',
       'playground/app/assets/css/main.css',
-      ...readdirSync('app', { recursive: true, encoding: 'utf8' }).filter(f => /\.(vue|ts|css)$/.test(f)).map(f => join('app', f)),
+      ...['app', 'presentation'].flatMap(dir => readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter(f => /\.(vue|ts|css)$/.test(f)).map(f => join(dir, f))),
     ]
     const offending = files.filter(f => /--(ui|api|tm)-[a-z]/.test(readFileSync(f, 'utf8')))
     expect(offending).toEqual([])
@@ -100,7 +100,7 @@ describe('semantic presentation', () => {
 /** Every class-like token in the layer's string literals. */
 function candidates(): string[] {
   const found = new Set<string>()
-  for (const file of globSync('app/**/*.{vue,ts}')) {
+  for (const file of globSync('{app,presentation}/**/*.{vue,ts}')) {
     for (const literal of readFileSync(file, 'utf8').match(/(["'`])(?:(?!\1)[^\\\n]|\\.)*\1/g) ?? []) {
       for (const token of literal.slice(1, -1).split(/\s+/)) {
         if (/^[a-z-]+(?::[a-z-[\]=]+)*:?[a-z0-9-./[\]]+$/.test(token)) found.add(token)
