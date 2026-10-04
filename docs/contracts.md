@@ -5,7 +5,9 @@
 
 ## 1. Purpose
 
-The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, `@nuxt4-layers/authentication/tailwind.css` (a Tailwind source declaration, §11), the server composition functions listed in §6, and the default pages, components, composables and messages listed in §9 and §11.
+The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, `@nuxt4-layers/authentication/presentation` (page text and styling, §11), `@nuxt4-layers/authentication/tailwind.css` (a Tailwind source declaration, §11), the server composition functions listed in §6, the client surface in §9, and the default pages and components in §11.
+
+The surface has three parts with one-way dependencies, described in [architecture.md](architecture.md): the **contract** (`./contracts`, plain TypeScript), the **core** (server, endpoints, client API and route middleware) and the **presentation** (pages, components, text and styling). Code that only needs to know who is signed in uses the contract and the core, and can turn the presentation off.
 
 Consumers MUST NOT import any other path. The authentication engine, database schema, server utilities and HTTP handler internals are private and may change without a major release.
 
@@ -85,6 +87,8 @@ Delivery is best effort. A failing sink is reported, but it never changes the ou
 ## 5. Configuration contract: `AuthenticationPolicy`
 
 `resolveAuthenticationPolicy(input)` merges host overrides onto `DEFAULT_AUTHENTICATION_POLICY` and validates the result. Unknown keys and values below the enforced floors are rejected.
+
+`AuthenticationPublicPolicy` is the non-secret part an interface needs to guide users (`password.minLength`/`maxLength`, `mfa`, `rememberedDevice.days`); `publicAuthenticationPolicy(policy)` derives it, and `GET /api/authentication/policy` returns it.
 
 | Setting | Default | Floor / ceiling |
 |---|---|---|
@@ -209,6 +213,10 @@ Federation rules:
 | `federationProviders`, `linkedAccounts`, `linkProvider`, `unlinkProvider` | Federation, as `AuthenticationResult<T>`. `signInWithProvider(provider, redirect?)` navigates to the provider. `linkProvider` navigates on success. |
 | `signUp`, `signIn`, `verifySecondFactor`, `signInWithPasskey`, `reauthenticate`, `signOut`, `requestPasswordReset`, `resetPassword`, `changePassword`, `mfaStatus`, `enrolTotp`, `confirmTotp`, `disableTotp`, `regenerateBackupCodes`, `registerPasskey`, `removePasskey`, `listSessions`, `revokeSession`, `revokeOtherSessions` | Each resolves to `AuthenticationResult<T>`: `{ ok: true, data }` or `{ ok: false, code }`. `signIn` may return `{ status: 'second-factor-required' }`. Passkey ceremonies use `@simplewebauthn/browser`, and a cancelled ceremony answers `validation-failed`. |
 
+`useAuthenticationPublicPolicy()` is also auto-imported. It returns a ref to the `AuthenticationPublicPolicy`, loaded once per request and shared. Interfaces, including the default pages, read the policy through it rather than calling the endpoint.
+
+`safeRedirectPath(candidate, fallback)` (from `./contracts`) accepts only same-origin absolute paths. Use it for any `redirect` query a custom page honours.
+
 Named route middleware:
 
 - `authenticated` sends anonymous visitors to `routes.signIn?redirect=<path>`, and sessions below the required level to `routes.mfa?redirect=<path>`.
@@ -219,7 +227,7 @@ Client state and middleware improve the user experience. They are not security e
 
 ## 10. Route configuration
 
-These are public runtime config values under `authentication.routes`, and hosts may override them:
+These are public runtime config values under `authentication.routes`. They belong to the core, which uses them for redirects and email links, and hosts may override them:
 
 | Key | Default | Used for |
 |---|---|---|
@@ -236,23 +244,28 @@ When the default pages are enabled, the paths chosen in `authentication.pages.pa
 
 `authentication.locale` (default `en-GB`) is passed to the mailer with every message. `authentication.appName` (default: the base URL's host) is shown in authenticator apps and passkey prompts.
 
-## 11. Default pages, components and messages
+## 11. Presentation: default pages, components and messages
 
-### Pages
-
-The layer registers six pages. Hosts choose their paths, or turn them off, in `nuxt.config.ts`:
+The presentation is optional. It depends only on the contract and the client surface (§9), never on the server, and the core never depends on it. Hosts configure it in `nuxt.config.ts`:
 
 ```ts
 export default defineNuxtConfig({
   extends: ['@nuxt4-layers/authentication'],
   authentication: {
+    presentation: true,                    // false: core only; no pages, components or presentation auto-imports
     pages: {
-      enabled: true,                       // false: register none, build your own from the components
+      enabled: true,                       // false: no pages, but keep the components to build your own
       paths: { signIn: '/login' },         // absolute paths; unspecified keys keep their defaults
     },
   },
 })
 ```
+
+With `presentation: false` the server, endpoints, `useAuthentication()`, `useAuthenticationPublicPolicy()` and the route middleware work unchanged; the host supplies its own pages at the configured `routes` (§10).
+
+### Pages
+
+When enabled, the layer registers six pages:
 
 | Key | Default path | Page | Middleware |
 |---|---|---|---|
@@ -267,9 +280,9 @@ Each page has one `<main>` landmark, one `h1`, a document title and the `lang` o
 
 ### Components
 
-Auto-imported with the `Authentication` prefix, for hosts that build their own pages: `AuthenticationSignInForm`, `AuthenticationSignUpForm`, `AuthenticationForgotPasswordForm`, `AuthenticationResetPasswordForm`, `AuthenticationMfaPanel`, `AuthenticationTotpEnrolment`, `AuthenticationBackupCodes`, `AuthenticationReauthenticate`, `AuthenticationSecuritySettings`, `AuthenticationProviderButtons`, `AuthenticationField` and `AuthenticationAlert`. Their props and events are documented in each component's header. They render no page chrome, so a host may place them in its own layout.
+Registered with the `Authentication` prefix (when `presentation` is on), for hosts that build their own pages: `AuthenticationSignInForm`, `AuthenticationSignUpForm`, `AuthenticationForgotPasswordForm`, `AuthenticationResetPasswordForm`, `AuthenticationMfaPanel`, `AuthenticationTotpEnrolment`, `AuthenticationBackupCodes`, `AuthenticationReauthenticate`, `AuthenticationSecuritySettings`, `AuthenticationProviderButtons`, `AuthenticationField` and `AuthenticationAlert`. Their props and events are documented in each component's header. They render no page chrome, so a host may place them in its own layout.
 
-`authenticationClasses` (auto-imported) holds the utility classes the components use, all taken from the `SemanticPresentationTheme` vocabulary.
+`authenticationClasses` (auto-imported, and exported from `./presentation`) holds the utility classes the components use, all taken from the `SemanticPresentationTheme` vocabulary.
 
 ### Styling
 
@@ -295,7 +308,7 @@ Beyond Theme Manager's same-role guarantees, the components use these deliberate
 
 ### Messages
 
-All text comes from the layer's en-GB catalogue, `AUTHENTICATION_MESSAGES_EN_GB` (exported from `./contracts`). Hosts override wording or add locales in `app.config.ts`:
+All text comes from the layer's en-GB catalogue, `AUTHENTICATION_MESSAGES_EN_GB` (exported from `./presentation`). Hosts override wording or add locales in `app.config.ts`:
 
 ```ts
 export default defineAppConfig({

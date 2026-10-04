@@ -96,3 +96,18 @@ export function resolveAuthenticationPolicy(input: AuthenticationPolicyInput = {
     emailVerification: input.emailVerification ?? defaults.emailVerification,
   })
 }
+
+/** The non-secret parts of the policy that interfaces need to guide users. */
+export interface AuthenticationPublicPolicy {
+  password: { minLength: number, maxLength: number }
+  mfa: AuthenticationPolicy['mfa']
+  rememberedDevice: { days: number }
+}
+
+export function publicAuthenticationPolicy(policy: AuthenticationPolicy): AuthenticationPublicPolicy {
+  return {
+    password: { minLength: policy.password.minLength, maxLength: policy.password.maxLength },
+    mfa: policy.mfa,
+    rememberedDevice: { days: policy.rememberedDevice.days },
+  }
+}

@@ -9,8 +9,9 @@ import { fileURLToPath } from 'node:url'
 export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
-  // Default pages (build-time options under `authentication.pages`).
-  modules: [fileURLToPath(new URL('./modules/pages', import.meta.url))],
+  // Presentation (default pages and form components), registered only when
+  // `authentication.presentation` is true. The core below never depends on it.
+  modules: [fileURLToPath(new URL('./modules/presentation', import.meta.url))],
 
   runtimeConfig: {
     // Server-only. Supplied through deployment secret management, never committed.

@@ -5,7 +5,9 @@
  * types and pure helpers. Everything else in the repository is private.
  *
  * The contract uses the language of authentication. It deliberately exposes no
- * type from the private authentication engine, database driver or ORM.
+ * type from the private authentication engine, database driver or ORM, and
+ * nothing from the presentation (page text lives in `./presentation`). It is
+ * plain TypeScript: it imports nothing from Nuxt, Vue, h3 or the server.
  */
 
 // ---------------------------------------------------------------------------
@@ -52,11 +54,19 @@ export { AUTHENTICATION_EVENT_TYPES } from '../shared/events'
 export type {
   AuthenticationPolicy,
   AuthenticationPolicyInput,
+  AuthenticationPublicPolicy,
 } from '../shared/policy'
 export {
   DEFAULT_AUTHENTICATION_POLICY,
+  publicAuthenticationPolicy,
   resolveAuthenticationPolicy,
 } from '../shared/policy'
+
+// ---------------------------------------------------------------------------
+// Return paths
+// ---------------------------------------------------------------------------
+
+export { safeRedirectPath } from '../shared/redirect'
 
 // ---------------------------------------------------------------------------
 // Composition ports (supplied by the host application)
@@ -71,10 +81,3 @@ export type {
   PostgresPoolLike,
 } from '../shared/ports'
 export { AUTHENTICATION_MESSAGE_KINDS } from '../shared/ports'
-
-// ---------------------------------------------------------------------------
-// Messages (default pages and forms)
-// ---------------------------------------------------------------------------
-
-export type { AuthenticationMessageKey, AuthenticationMessages } from '../shared/messages'
-export { AUTHENTICATION_MESSAGES_EN_GB, formatMessage, resolveMessage } from '../shared/messages'

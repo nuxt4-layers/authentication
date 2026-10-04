@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { safeRedirectPath } from '../../../shared/redirect'
+import { safeRedirectPath } from '../../contracts'
 
 /**
  * PUBLIC. Complete sign-in: password, second factor, passkey and identity

@@ -1,6 +1,6 @@
 import { useAppConfig, useRuntimeConfig } from '#imports'
-import type { AuthenticationMessages } from '../../shared/messages'
-import { resolveMessage } from '../../shared/messages'
+import type { AuthenticationMessages } from '../messages'
+import { resolveMessage } from '../messages'
 
 /**
  * PUBLIC. Localised text for the layer's pages and forms.

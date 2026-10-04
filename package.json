@@ -1,6 +1,6 @@
 {
   "name": "@nuxt4-layers/authentication",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Nuxt 4 foundation capability that establishes who has signed in and manages the secure lifecycle of the authenticated session.",
@@ -13,6 +13,7 @@
     ".": "./nuxt.config.ts",
     "./contracts": "./contracts/index.ts",
     "./capability": "./capability.json",
+    "./presentation": "./presentation/index.ts",
     "./tailwind.css": "./tailwind.css"
   },
   "files": [
@@ -25,6 +26,7 @@
     "README.md",
     "LICENSE",
     "modules",
+    "presentation",
     "tailwind.css"
   ],
   "scripts": {

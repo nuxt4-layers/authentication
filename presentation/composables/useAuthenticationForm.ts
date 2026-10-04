@@ -1,11 +1,6 @@
 import type { AuthenticationErrorCode, AuthenticationResult } from '../../contracts'
+import { useAuthenticationPublicPolicy } from '../../app/composables/useAuthenticationPublicPolicy'
 import { useAuthenticationText } from './useAuthenticationText'
-
-interface PublicPolicy {
-  password: { minLength: number, maxLength: number }
-  mfa: 'required' | 'optional'
-  rememberedDevice: { days: number }
-}
 
 /**
  * PUBLIC. Shared state for the layer's forms: a pending flag, the current
@@ -20,7 +15,7 @@ export function useAuthenticationForm() {
   onMounted(() => { hydrated.value = true })
   const disabled = computed(() => pending.value || !hydrated.value)
   const error = ref<string | null>(null)
-  const { data: policy } = useFetch<PublicPolicy>('/api/authentication/policy', { key: 'authentication:policy', server: true, lazy: false })
+  const policy = useAuthenticationPublicPolicy()
   const minLength = computed(() => policy.value?.password.minLength ?? 15)
 
   function messageFor(code: AuthenticationErrorCode): string {

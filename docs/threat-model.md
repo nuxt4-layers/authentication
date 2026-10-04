@@ -114,9 +114,10 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | T14 Repository settings (rulesets, code owners, secret scanning with push protection, CodeQL, private vulnerability reporting) | Checklist (phase 6) | `docs/repository-security.md` |
 | T16 Default pages refuse framing, caching and referrer leakage | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 | T16 Credentials never reach a URL: forms use `method="post"` and stay disabled until hydrated, so no native (GET) submission can happen. Found by host composition, where slower hydration let a sign-in submit as GET | Implemented (phase 6) | `tests/e2e/pages.spec.ts` |
-| T16 TOTP QR code rendered in the browser from the provisioning URI; no third-party QR service | Implemented (phase 5) | `app/components/authentication/TotpEnrolment.vue` (review) |
+| T16 TOTP QR code rendered in the browser from the provisioning URI; no third-party QR service | Implemented (phase 5) | `presentation/components/TotpEnrolment.vue` (review) |
 | Default pages: sign-in returns only to same-origin paths | Implemented (phase 5) | `tests/e2e/pages.spec.ts`, `tests/internals.test.ts` |
 | Default pages: automated WCAG 2.2 AA rules (axe) in light and dark mode, non-text contrast, 320px reflow, keyboard-only journey, announced and focused errors | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
+| Presentation separated from the core: the core never imports it, it reaches the server only through the client API, and `presentation: false` registers none of it | Implemented (phase 6) | `tests/architecture.test.ts` |
 | Default pages follow Theme Manager's semantic presentation grammar: same-role, same-state Fill/Pen/Edge, documented deliberate pairings, Theme Manager sizes only, no private theme variables | Implemented (phase 6) | `tests/presentation.test.ts` |
 | Default pages: password managers supported (`autocomplete` `username` or `email`, `current-password`, `new-password`, `one-time-code`; paste allowed; show-password toggle) | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 

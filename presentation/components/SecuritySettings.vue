@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuthenticationResult, AuthenticationSessionSummary } from '../../../contracts'
+import type { AuthenticationResult, AuthenticationSessionSummary } from '../../contracts'
 
 /**
  * PUBLIC. Account security: password, authenticator app and backup codes,
