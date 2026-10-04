@@ -6,7 +6,7 @@ Governed by `nuxt4-layers/platform-architecture`; persistence follows ADR-0002.
 Better Auth is the private engine (from phase 2) and must never appear in `contracts/` or `shared/`.
 
 ## Commands
-- `pnpm install`, then `pnpm dev:prepare` for Nuxt types. Never add a `prepare`/`postinstall` script: Git installs would then pull devDependencies (private Theme Manager) into hosts
+- `pnpm install`, then `pnpm dev:prepare` for Nuxt types. Never add a `prepare`/`postinstall` script: Git installs would then pull devDependencies (Theme Manager, Playwright) into hosts
 - `pnpm check` = `nuxt typecheck` + `vitest run`; run it after every code change
 - `pnpm build:playground` proves the layer composes in a host
 - Single test file: `pnpm vitest run tests/<name>.test.ts`

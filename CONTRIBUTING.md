@@ -17,14 +17,14 @@ Commits to `master` must be signed. Sign yours with
 [SSH or GPG](https://docs.github.com/authentication/managing-commit-signature-verification),
 or a maintainer will squash-merge (GitHub signs the merge commit).
 
-## Private Theme Manager dependency
+## Theme Manager
 
-The playground and the end-to-end suite compose Theme Manager, which is
-currently a private repository. Until it is public, contributors without
-access to `nuxt4-layers/theme-manager` cannot run `pnpm install` from the
-lockfile, and CI on pull requests from forks cannot fetch it (forks receive no
-secrets), so the Quality check on your pull request will fail at that step.
-A maintainer reviews the change first and then runs the full suite for you.
+The playground and the end-to-end suite compose
+[Theme Manager](https://github.com/nuxt4-layers/theme-manager), pinned by
+commit as a devDependency. The default pages follow its
+[Semantic Presentation Guide](https://github.com/nuxt4-layers/theme-manager/blob/master/docs/semantic-presentation-guide.md):
+choose tokens by meaning, pair Fill, Pen and Edge of the same role and state,
+and never patch its private `--ui-*` variables.
 
 ## Dependencies
 

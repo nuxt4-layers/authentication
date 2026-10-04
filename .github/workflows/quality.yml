@@ -41,32 +41,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # Theme Manager (a pinned devDependency for the playground and e2e suite)
-      # is a private repository. A fine-grained, read-only token for the
-      # nuxt4-layers organisation is scoped to these URL rewrites only, written
-      # to a throwaway Git config that exists only for the install step, so no
-      # later step (which runs the pull request's own code) can read it.
-      # Pull requests from forks receive no secrets; see CONTRIBUTING.md.
-      - name: Authorise read access to nuxt4-layers repositories
-        env:
-          GIT_CONFIG_GLOBAL: ${{ runner.temp }}/nuxt4-layers.gitconfig
-          NUXT4_LAYERS_READ_TOKEN: ${{ secrets.NUXT4_LAYERS_READ_TOKEN }}
-        run: |
-          if [ -z "$NUXT4_LAYERS_READ_TOKEN" ]; then
-            echo "::error::The NUXT4_LAYERS_READ_TOKEN secret is unavailable (pull requests from forks do not receive secrets). See CONTRIBUTING.md."
-            exit 1
-          fi
-          base="https://x-access-token:${NUXT4_LAYERS_READ_TOKEN}@github.com/nuxt4-layers/"
-          git config --global url."$base".insteadOf "git@github.com:nuxt4-layers/"
-          git config --global --add url."$base".insteadOf "ssh://git@github.com/nuxt4-layers/"
-          git config --global --add url."$base".insteadOf "https://github.com/nuxt4-layers/"
-      - name: Install dependencies
-        env:
-          GIT_CONFIG_GLOBAL: ${{ runner.temp }}/nuxt4-layers.gitconfig
-        run: pnpm install --frozen-lockfile
-      - name: Remove the read token
-        if: always()
-        run: rm -f "$RUNNER_TEMP/nuxt4-layers.gitconfig"
+      - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e

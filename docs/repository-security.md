@@ -17,9 +17,9 @@ vulnerability disclosed publicly before a fix.
 |---|---|---|
 | P1 | History contains no secrets (scanned all 16 commits for tokens, keys, credentials) | Clean. The only credential is the disposable CI PostgreSQL password |
 | P2 | Delete merged branches (`claude/charming-hopper-boizun`) | Open |
-| P3 | Decide the private Theme Manager dependency: make `nuxt4-layers/theme-manager` public, or keep it private and accept that outside contributors cannot run the full suite (see CONTRIBUTING.md) | Open |
+| P3 | Theme Manager dependency reachable by outside contributors | Done: `nuxt4-layers/theme-manager` is public; CI installs it without a token |
 | P4 | Review open issues and pull requests: they become public too | 1 open issue |
-| P5 | Rotate `NUXT4_LAYERS_READ_TOKEN` to a fine-grained token with *Contents: read* on `nuxt4-layers/theme-manager` only, with an expiry; delete it if Theme Manager becomes public | Open |
+| P5 | Delete the `NUXT4_LAYERS_READ_TOKEN` repository secret and revoke the token: CI no longer uses it | Open |
 
 ## Repository settings
 
@@ -49,7 +49,7 @@ While there is a single maintainer, the approval requirement blocks your own pul
 
 **Settings → Secrets and variables → Actions**
 
-- [ ] Only `NUXT4_LAYERS_READ_TOKEN` (see P5). No environment or organisation secrets exposed to this repository that it does not need.
+- [ ] No repository, environment or organisation secrets: CI needs none (see P5).
 - [ ] Never add a `pull_request_target` or `workflow_run` workflow that checks out pull-request code: those run with secrets and a write token.
 
 **Settings → Advanced Security** (free for public repositories)
@@ -74,7 +74,7 @@ Moderation: use *Interaction limits* (Settings → Moderation options) if a spam
 | Contributor workflow and dependency rules | `CONTRIBUTING.md`, `.github/pull_request_template.md` |
 | Code owner review for every path | `.github/CODEOWNERS` |
 | Actions pinned to full commit SHAs; workflow token read-only; checkout without persisted credentials | `.github/workflows/*.yml` |
-| Read token confined to the install step (throwaway Git config, removed before the pull request's code runs); no `pull_request_target` | `.github/workflows/quality.yml` |
+| CI uses no secrets; no `pull_request_target` | `.github/workflows/quality.yml` |
 | Dependency and licence review on pull requests (public repositories) | `.github/workflows/dependency-review.yml` |
 | Weekly Dependabot updates for npm and Actions with a 7-day cooldown | `.github/dependabot.yml` |
 | Install scripts only for allow-listed packages; versions at least a day old; registry-only transitive dependencies; frozen lockfile in CI | `pnpm-workspace.yaml`, `.github/workflows/quality.yml` |

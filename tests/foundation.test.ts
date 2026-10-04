@@ -34,7 +34,7 @@ describe('Authentication repository foundation', () => {
   })
 
   it('runs no install-time scripts, so Git installs carry runtime dependencies only', () => {
-    // A prepare/install script makes pnpm install devDependencies (private Theme Manager) in every host.
+    // A prepare/install script makes pnpm install devDependencies (Theme Manager, Playwright) in every host.
     for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack']) {
       expect(pkg.scripts[hook], hook).toBeUndefined()
     }
