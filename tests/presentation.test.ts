@@ -1,11 +1,13 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { globSync, readFileSync, readdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { authenticationClasses, DELIBERATE_PAIRINGS } from '../app/utils/authentication-classes'
 
 /**
  * Theme Manager's Semantic Presentation Guide: Fill, Pen and Edge of one
  * surface share a role and state, and cross-role pairings are deliberate.
+ * Every utility, sizes included, resolves to a Theme Manager token.
  */
 
 const CARD = 'fill-base-default'
@@ -43,16 +45,17 @@ describe('semantic presentation', () => {
     expect(offending).toEqual([])
   })
 
-  it('advances fill, pen and edge together through hover and disabled states', () => {
+  it('advances fill, pen and edge together through hover, active and disabled states', () => {
     const offending = Object.entries(authenticationClasses).flatMap(([name, classes]) => {
       const all = tokens(classes)
       const roles = (variant: string) => new Set(all.filter(t => t.variant === variant).map(t => `${t.family}-${t.name.split('-')[1]}`))
       const base = roles('')
-      return ['hover:', 'disabled:'].flatMap((variant) => {
+      const missing = ['primaryButton', 'secondaryButton', 'dangerButton'].includes(name) ? ['hover:', 'active:', 'disabled:'].filter(v => roles(v).size === 0).map(v => `${name}: no ${v} state`) : []
+      return missing.concat(['hover:', 'active:', 'disabled:'].flatMap((variant) => {
         const changed = roles(variant)
         if (changed.size === 0) return []
         return [...base].filter(r => !r.startsWith('edge-base') && !changed.has(r)).map(r => `${name}: ${r} has no ${variant} state`)
-      })
+      }))
     })
     expect(offending).toEqual([])
   })
@@ -75,4 +78,43 @@ describe('semantic presentation', () => {
     const offending = files.filter(f => /--(ui|api|tm)-[a-z]/.test(readFileSync(f, 'utf8')))
     expect(offending).toEqual([])
   })
+
+  it('resolves every utility to a Theme Manager token, never a Tailwind default', async () => {
+    const classes = candidates()
+    const css = await compileWithThemeManager(classes)
+    const offGrammar = classes.filter((name) => {
+      const escaped = name.replace(/[:./[\]=]/g, m => `\\${m}`)
+      const rule = css.match(new RegExp(`\\.${escaped}(?::[a-z-]+)*\\s*\\{([^}]*)\\}`))?.[1]
+      if (!rule) return false // not a utility (plain text in a string literal)
+      return /calc\(var\(--spacing\)|--color-(?!fill-|pen-|edge-)[a-z]+-\d|--tracking-|--leading-|--default-font|\[/.test(rule)
+    })
+    expect(offGrammar).toEqual([])
+  })
+
+  it('names a semantic role (fill, pen or edge) in every colour utility', () => {
+    const colour = /^(?:[a-z-]+:)*(?:bg|text|border|outline|divide|ring|fill|stroke|decoration|placeholder)-(?!fill-|pen-|edge-)(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white)\b/
+    expect(candidates().filter(name => colour.test(name))).toEqual([])
+  })
 })
+
+/** Every class-like token in the layer's string literals. */
+function candidates(): string[] {
+  const found = new Set<string>()
+  for (const file of globSync('app/**/*.{vue,ts}')) {
+    for (const literal of readFileSync(file, 'utf8').match(/(["'`])(?:(?!\1)[^\\\n]|\\.)*\1/g) ?? []) {
+      for (const token of literal.slice(1, -1).split(/\s+/)) {
+        if (/^[a-z-]+(?::[a-z-[\]=]+)*:?[a-z0-9-./[\]]+$/.test(token)) found.add(token)
+      }
+    }
+  }
+  return [...found]
+}
+
+/** Compiles classes against Theme Manager's public presentation.css export (never its private paths). */
+async function compileWithThemeManager(classes: string[]): Promise<string> {
+  const require = createRequire(import.meta.url)
+  const { compile } = await import(require.resolve('@tailwindcss/node', { paths: [dirname(require.resolve('tailwindcss/package.json'))] }))
+  const presentation = require.resolve('@nuxt4-layers/theme-manager/presentation.css')
+  const compiler = await compile(`@import ${JSON.stringify(presentation)};`, { base: dirname(presentation), onDependency: () => {} })
+  return compiler.build(classes)
+}

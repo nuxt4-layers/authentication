@@ -16,7 +16,7 @@ vulnerability disclosed publicly before a fix.
 | # | Check | Observed (2026-10-04) |
 |---|---|---|
 | P1 | History contains no secrets (scanned all 16 commits for tokens, keys, credentials) | Clean. The only credential is the disposable CI PostgreSQL password |
-| P2 | Delete merged branches (`claude/charming-hopper-boizun`) | Open |
+| P2 | Close superseded pull request #6 and delete its branch (`claude/charming-hopper-boizun`) | Open |
 | P3 | Theme Manager dependency reachable by outside contributors | Done: `nuxt4-layers/theme-manager` is public; CI installs it without a token |
 | P4 | Review open issues and pull requests: they become public too | 1 open issue |
 | P5 | Delete the `NUXT4_LAYERS_READ_TOKEN` repository secret and revoke the token: CI no longer uses it | Open |
