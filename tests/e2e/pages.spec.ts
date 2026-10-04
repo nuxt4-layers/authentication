@@ -134,9 +134,12 @@ test.describe('default pages', () => {
         await expectNonTextContrast(page)
       }
       // Hover changes fill and pen together, so contrast holds under the pointer.
+      // Theme Manager's default theme is composed unmodified.
       await page.goto('/sign-in')
       await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), mode === 'dark')
       await page.getByRole('button', { name: 'Sign in', exact: true }).hover()
+      await expectAccessible(page)
+      await page.getByRole('link', { name: 'Forgotten your password?' }).hover()
       await expectAccessible(page)
     }
   })

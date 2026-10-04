@@ -27,7 +27,7 @@ Better Auth is the private engine (from phase 2) and must never appear in `contr
 - No secrets, codes, tokens or email addresses in events or logs.
 - Defaults are secure; loosening policy requires a documented risk treatment.
 - Keep `docs/contracts.md`, `docs/threat-model.md` (control register) and `docs/roadmap.md` in step with code.
-- Default pages and components style only through the SemanticPresentationTheme vocabulary (`authenticationClasses`), never raw colours; text comes from `shared/messages.ts` via `useAuthenticationText()`. Keep every component in `tailwind.css` source paths.
-- Never weaken an axe or contrast assertion to get green: fix the component, or (for palette values) the host theme in the playground, and report Theme Manager palette issues upstream.
+- Default pages and components style only through the SemanticPresentationTheme vocabulary (`authenticationClasses`), never raw colours, following Theme Manager's Semantic Presentation Guide: Fill/Pen/Edge of one surface share role and state; any other pairing goes in `DELIBERATE_PAIRINGS` and `docs/contracts.md`. Text comes from `shared/messages.ts` via `useAuthenticationText()`. Keep every component in `tailwind.css` source paths.
+- Never weaken an axe or contrast assertion to get green. Fix the component's semantic composition first; a genuine palette defect is fixed in Theme Manager, never by setting its private `--ui-*` variables here or in the playground.
 - Client calls that may run during SSR must use `useRequestFetch()` so the session cookie is forwarded.
 - Package manager: pnpm. Commit `pnpm-lock.yaml`.

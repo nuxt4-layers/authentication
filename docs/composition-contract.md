@@ -44,7 +44,7 @@ The host application:
 - serves the application from a registrable domain (not an IP address) so passkeys work; the passkey relying-party ID is the base URL's host;
 - for each identity provider it enables, registers `<base URL>/api/authentication/federation/callback/<id>` as the redirect URI and supplies the client ID and secret through secret management (`NUXT_AUTHENTICATION_PROVIDERS_<ID>_CLIENT_ID` / `_CLIENT_SECRET`; Microsoft also takes `_TENANT_ID`; the generic OIDC provider takes `_DISCOVERY_URL` and an optional `_NAME`);
 - keeps the default pages (configured under `authentication.pages` in `nuxt.config.ts`) or disables them and provides its own at the configured routes, including `routes.mfa`, where sessions below the required level enrol a second factor or step up;
-- when using the default pages with Theme Manager, adds `@import "@nuxt4-layers/authentication/tailwind.css";` after Theme Manager's `presentation.css` in its Tailwind entry, and composes a theme whose pairings meet the contrast requirements in `docs/contracts.md` §11;
+- when using the default pages with Theme Manager, adds `@import "@nuxt4-layers/authentication/tailwind.css";` after Theme Manager's `presentation.css` in its Tailwind entry, and composes a theme whose pairings meet the contrast requirements in `docs/contracts.md` (Styling), customising it through Theme Manager rather than by overriding its private `--ui-*` variables;
 - overrides or translates page text through `app.config.ts` (`authentication.messages`);
 - sets `NUXT_AUTHENTICATION_TRUST_PROXY=true` only when a reverse proxy overwrites `X-Forwarded-For`, so per-client throttling sees real client addresses;
 - integration-tests the composed system, including negative tests.
