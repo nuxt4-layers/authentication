@@ -243,6 +243,21 @@ test.describe('default pages', () => {
     await context.close()
   })
 
+  test('what is typed before the page is interactive is kept and submitted', async ({ page }) => {
+    const email = await verifiedEmail(page)
+    // Hold the application's scripts back so typing happens before hydration.
+    await page.route('**/_nuxt/**/*.js', async (route) => {
+      await new Promise(resolve => setTimeout(resolve, 1_500))
+      await route.continue()
+    })
+    await page.goto('/sign-in?redirect=/protected', { waitUntil: 'commit' })
+    await page.getByLabel('Email address').fill(email)
+    await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click() // waits until enabled
+    await expect(page).toHaveURL(/\/mfa\?redirect=/)
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+  })
+
   test('the password field reveals and hides its value with a pressed state', async ({ page }) => {
     await page.goto('/sign-in')
     const toggle = page.getByRole('button', { name: 'Show password' })
