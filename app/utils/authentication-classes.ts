@@ -1,12 +1,13 @@
 /**
  * Utility classes from the SemanticPresentationTheme vocabulary (Theme Manager's
  * semantic presentation grammar), shared by the layer's components. Kept as
- * literal strings so Tailwind can find them through tailwind.css.
+ * literal strings so Tailwind can find them through tailwind.css. Sizes come
+ * from Theme Manager's scales too, never Tailwind's defaults.
  *
  * Fill, Pen and Edge of one surface or control share a role and a state, and
- * advance together (hover with hover, disabled with disabled). Text and
- * borders without a fill of their own sit on the card (fill-base-default). The
- * only exceptions are DELIBERATE_PAIRINGS below, each also listed in
+ * advance together (hover, active and disabled). Text and borders without a
+ * fill of their own sit on the card (fill-base-default). The only exceptions
+ * are DELIBERATE_PAIRINGS below, each also listed in
  * docs/contracts.md (Styling); tests/presentation.test.ts enforces both.
  */
 
@@ -15,7 +16,7 @@
 const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-edge-base-active'
 
 // Links are link-role surfaces: link pen on link fill, underlined.
-const linkSurface = 'rounded-sm bg-fill-link-default px-1 text-pen-link-default underline hover:bg-fill-link-hover hover:text-pen-link-hover'
+const linkSurface = 'rounded-sm bg-fill-link-default px-1 text-pen-link-default underline hover:bg-fill-link-hover hover:text-pen-link-hover active:bg-fill-link-active active:text-pen-link-active'
 
 export const authenticationClasses = {
   page: 'min-h-screen bg-fill-floor-default text-pen-floor-default px-4 py-8 font-sans',
@@ -32,9 +33,9 @@ export const authenticationClasses = {
   input: `mt-1 block w-full rounded-md border border-edge-input-default bg-fill-input-default px-3 py-2 text-base text-pen-input-default aria-[invalid=true]:border-edge-error-default ${focus}`,
   hint: 'mt-1 text-sm text-pen-muted-default',
   fieldError: 'mt-1 text-sm font-medium text-pen-error-default',
-  primaryButton: `inline-flex min-h-11 w-full items-center justify-center rounded-md border border-edge-primary-default bg-fill-primary-default px-4 py-2 text-base font-semibold text-pen-primary-default hover:border-edge-primary-hover hover:bg-fill-primary-hover hover:text-pen-primary-hover disabled:border-edge-primary-disabled disabled:bg-fill-primary-disabled disabled:text-pen-primary-disabled ${focus}`,
-  secondaryButton: `inline-flex min-h-11 items-center justify-center rounded-md border border-edge-secondary-default bg-fill-secondary-default px-4 py-2 text-base font-medium text-pen-secondary-default hover:border-edge-secondary-hover hover:bg-fill-secondary-hover hover:text-pen-secondary-hover disabled:border-edge-secondary-disabled disabled:bg-fill-secondary-disabled disabled:text-pen-secondary-disabled ${focus}`,
-  dangerButton: `inline-flex min-h-11 items-center justify-center rounded-md border border-edge-error-default bg-fill-error-default px-4 py-2 text-base font-medium text-pen-error-default hover:border-edge-error-hover hover:bg-fill-error-hover hover:text-pen-error-hover disabled:border-edge-error-disabled disabled:bg-fill-error-disabled disabled:text-pen-error-disabled ${focus}`,
+  primaryButton: `inline-flex min-h-8 w-full items-center justify-center rounded-md border border-edge-primary-default bg-fill-primary-default px-4 py-2 text-base font-semibold text-pen-primary-default hover:border-edge-primary-hover hover:bg-fill-primary-hover hover:text-pen-primary-hover active:border-edge-primary-active active:bg-fill-primary-active active:text-pen-primary-active disabled:border-edge-primary-disabled disabled:bg-fill-primary-disabled disabled:text-pen-primary-disabled ${focus}`,
+  secondaryButton: `inline-flex min-h-8 items-center justify-center rounded-md border border-edge-secondary-default bg-fill-secondary-default px-4 py-2 text-base font-medium text-pen-secondary-default hover:border-edge-secondary-hover hover:bg-fill-secondary-hover hover:text-pen-secondary-hover active:border-edge-secondary-active active:bg-fill-secondary-active active:text-pen-secondary-active disabled:border-edge-secondary-disabled disabled:bg-fill-secondary-disabled disabled:text-pen-secondary-disabled ${focus}`,
+  dangerButton: `inline-flex min-h-8 items-center justify-center rounded-md border border-edge-error-default bg-fill-error-default px-4 py-2 text-base font-medium text-pen-error-default hover:border-edge-error-hover hover:bg-fill-error-hover hover:text-pen-error-hover active:border-edge-error-active active:bg-fill-error-active active:text-pen-error-active disabled:border-edge-error-disabled disabled:bg-fill-error-disabled disabled:text-pen-error-disabled ${focus}`,
   toggleButton: `ml-2 inline-flex min-h-6 items-center text-sm ${linkSurface} ${focus}`,
   link: `${linkSurface} ${focus}`,
   // A link standing on its own line: at least 24px tall (WCAG 2.2 target size).
@@ -45,7 +46,7 @@ export const authenticationClasses = {
   divider: 'my-4 flex items-center gap-3 text-sm text-pen-muted-default',
   list: 'flex flex-col divide-y divide-edge-base-default',
   listItem: 'flex flex-wrap items-center justify-between gap-3 py-3',
-  code: 'font-mono text-base tracking-wider text-pen-base-default',
+  code: 'font-mono text-base text-pen-base-default',
 } as const
 
 /**

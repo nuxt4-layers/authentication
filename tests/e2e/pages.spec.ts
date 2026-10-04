@@ -182,6 +182,8 @@ test.describe('default pages', () => {
     await page.keyboard.press('Tab') // show/hide control
     await page.keyboard.press('Tab')
     await page.keyboard.type(PASSWORD)
+    // The form accepts submission once interactive (see "credentials never reach the URL").
+    await expect(page.getByRole('button', { name: 'Create account' })).toBeEnabled()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('status')).toContainText(email)
 

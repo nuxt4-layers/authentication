@@ -21,7 +21,7 @@ or a maintainer will squash-merge (GitHub signs the merge commit).
 
 The playground and the end-to-end suite compose
 [Theme Manager](https://github.com/nuxt4-layers/theme-manager), pinned by
-commit as a devDependency. The default pages follow its
+commit (currently the v0.1.0 release) as a devDependency. The default pages follow its
 [Semantic Presentation Guide](https://github.com/nuxt4-layers/theme-manager/blob/master/docs/semantic-presentation-guide.md):
 choose tokens by meaning, pair Fill, Pen and Edge of the same role and state,
 and never patch its private `--ui-*` variables.
