@@ -18,13 +18,19 @@ describe('Authentication repository foundation', () => {
       '.': './nuxt.config.ts',
       './contracts': './contracts/index.ts',
       './capability': './capability.json',
+      './tailwind.css': './tailwind.css',
     })
     expect(manifest.publicExports).toEqual(Object.keys(pkg.exports))
   })
 
-  it('provides the Authentication contract and requires no other capability', () => {
+  it('provides the Authentication contract and requires only an optional presentation theme', () => {
     expect(manifest.provides).toEqual([{ capability: 'Authentication', contractVersion: '1' }])
-    expect(manifest.requires).toEqual([])
+    expect(manifest.requires).toEqual([expect.objectContaining({ capability: 'SemanticPresentationTheme', contractVersion: '1', optional: true })])
+  })
+
+  it('keeps Theme Manager a development dependency only (no runtime package dependency)', () => {
+    expect(pkg.dependencies).not.toHaveProperty('@nuxt4-layers/theme-manager')
+    expect(pkg.devDependencies['@nuxt4-layers/theme-manager']).toMatch(/#[0-9a-f]{40}$/)
   })
 
   it('declares database and mailer as required ports and the rest as optional', () => {

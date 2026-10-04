@@ -4,8 +4,13 @@
  * Hosts compose this layer by package name from `extends` and supply the
  * required ports from a Nitro plugin. See docs/composition-contract.md.
  */
+import { fileURLToPath } from 'node:url'
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
+
+  // Default pages (build-time options under `authentication.pages`).
+  modules: [fileURLToPath(new URL('./modules/pages', import.meta.url))],
 
   runtimeConfig: {
     // Server-only. Supplied through deployment secret management, never committed.
@@ -40,6 +45,9 @@ export default defineNuxtConfig({
           afterSignIn: '/',
           afterSignOut: '/',
           resetPassword: '/reset-password',
+          signUp: '/sign-up',
+          forgotPassword: '/forgot-password',
+          security: '/account/security',
           // Where the `authenticated` middleware sends sessions that must enrol
           // a second factor or step up to aal2.
           mfa: '/mfa',

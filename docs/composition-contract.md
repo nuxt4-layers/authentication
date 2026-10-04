@@ -29,6 +29,8 @@ Composition root supplies: database pool, mailer, event sink, policy.
 
 Authentication has **no package dependency** on UI, Theme Manager, Identity, Authorization, Audit, any database vendor SDK, or any mail provider.
 
+The default pages declare an **optional** required capability, `SemanticPresentationTheme` contract version 1, in `capability.json`. It is a vocabulary contract, not a package dependency: the components use Theme Manager's semantic utility classes, and the host composes Theme Manager (or another provider of the same vocabulary) beside authentication. Without it, the server, composables and middleware work unchanged, and the pages render unstyled but usable. Theme Manager appears in this repository only as a pinned devDependency for the playground and the end-to-end suite.
+
 ## 4. Host responsibilities
 
 The host application:
@@ -41,7 +43,9 @@ The host application:
 - applies the layer's database migrations by calling `migrateAuthenticationDatabase()` once after supplying the database (authentication requests wait for it);
 - serves the application from a registrable domain (not an IP address) so passkeys work; the passkey relying-party ID is the base URL's host;
 - for each identity provider it enables, registers `<base URL>/api/authentication/federation/callback/<id>` as the redirect URI and supplies the client ID and secret through secret management (`NUXT_AUTHENTICATION_PROVIDERS_<ID>_CLIENT_ID` / `_CLIENT_SECRET`; Microsoft also takes `_TENANT_ID`; the generic OIDC provider takes `_DISCOVERY_URL` and an optional `_NAME`);
-- provides a route at `routes.mfa` where sessions below the required level enrol a second factor or step up (the default pages arrive in phase 5);
+- keeps the default pages (configured under `authentication.pages` in `nuxt.config.ts`) or disables them and provides its own at the configured routes, including `routes.mfa`, where sessions below the required level enrol a second factor or step up;
+- when using the default pages with Theme Manager, adds `@import "@nuxt4-layers/authentication/tailwind.css";` after Theme Manager's `presentation.css` in its Tailwind entry, and composes a theme whose pairings meet the contrast requirements in `docs/contracts.md` §11;
+- overrides or translates page text through `app.config.ts` (`authentication.messages`);
 - sets `NUXT_AUTHENTICATION_TRUST_PROXY=true` only when a reverse proxy overwrites `X-Forwarded-For`, so per-client throttling sees real client addresses;
 - integration-tests the composed system, including negative tests.
 

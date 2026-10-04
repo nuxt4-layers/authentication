@@ -4,7 +4,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.4.0, phase 4 (federation).** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; and sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject) all work end to end on PostgreSQL. **MFA is required by default.** Default pages follow; see [docs/roadmap.md](docs/roadmap.md).
+> **Status: 0.5.0, phase 5 (default pages).** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
 
 ## Bounded responsibility
 
@@ -25,13 +25,15 @@ Authentication is **tenant-agnostic**. It publishes one fact, the `Authenticated
 @nuxt4-layers/authentication              Nuxt layer (compose with extends)
 @nuxt4-layers/authentication/contracts    Types, error codes, events, policy, port interfaces
 @nuxt4-layers/authentication/capability   Capability manifest
+@nuxt4-layers/authentication/tailwind.css  Tailwind sources for the default pages
 ```
 
 The layer also provides these, auto-imported for the host:
 
 - **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `migrateAuthenticationDatabase`.
 - **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`. The latter requires aal2 by default while MFA is required.
-- **Client:** the `useAuthentication()` composable, and the `authenticated` and `guest` route middleware.
+- **Client:** the `useAuthentication()` composable, and the `authenticated`, `guest` and `authentication-signed-in` route middleware.
+- **Pages and components:** default sign-in, sign-up, password recovery, MFA and security pages at configurable paths, the `Authentication*` form components they are built from, `useAuthenticationText()` and the en-GB message catalogue.
 - **HTTP:** endpoints under `/api/authentication/*`.
 
 Every other path is private. See [docs/contracts.md](docs/contracts.md).
@@ -92,6 +94,26 @@ const { principal, signOut } = useAuthentication()
 </script>
 ```
 
+### Default pages
+
+Pages are registered at `/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password`, `/mfa` and `/account/security`. Move or disable them in `nuxt.config.ts`:
+
+```ts
+export default defineNuxtConfig({
+  extends: ['@nuxt4-layers/authentication', '@nuxt4-layers/theme-manager'],
+  authentication: { pages: { paths: { signIn: '/login' } } },   // or { enabled: false }
+})
+```
+
+They are styled only through the `SemanticPresentationTheme` vocabulary (Theme Manager), an optional capability. Add the layer's sources to your Tailwind entry so the utilities are generated:
+
+```css
+@import "@nuxt4-layers/theme-manager/presentation.css";
+@import "@nuxt4-layers/authentication/tailwind.css";
+```
+
+Your theme must meet the contrast pairings in [docs/contracts.md](docs/contracts.md) §11. Override text or add locales in `app.config.ts` under `authentication.messages`.
+
 See [docs/composition-contract.md](docs/composition-contract.md) for the full contract, including persistence ([ADR-0002](https://github.com/nuxt4-layers/platform-architecture/blob/main/docs/decisions/ADR-0002-composition-supplied-persistence-and-capability-owned-schemas.md)) and configuration.
 
 ## Configuration
@@ -101,7 +123,7 @@ See [docs/composition-contract.md](docs/composition-contract.md) for the full co
 | `authentication.secret` | `NUXT_AUTHENTICATION_SECRET` | Signing/encryption secret, at least 32 random bytes. Server-only. |
 | `authentication.baseUrl` | `NUXT_AUTHENTICATION_BASE_URL` | Canonical external origin used in links and origin checks. Must be https in production. |
 | `authentication.trustProxy` | `NUXT_AUTHENTICATION_TRUST_PROXY` | Read client IPs from `X-Forwarded-For`. Enable only behind a proxy that overwrites it. |
-| `public.authentication.routes` | `NUXT_PUBLIC_AUTHENTICATION_ROUTES_*` | Sign-in, after-sign-in, after-sign-out, reset-password and MFA (enrol / step-up) paths. |
+| `public.authentication.routes` | `NUXT_PUBLIC_AUTHENTICATION_ROUTES_*` | Sign-in, sign-up, forgot-password, reset-password, MFA (enrol / step-up), security, after-sign-in and after-sign-out paths. When the default pages are on, `authentication.pages.paths` sets them at build time. |
 | `public.authentication.locale` | `NUXT_PUBLIC_AUTHENTICATION_LOCALE` | Locale passed to the mailer (default `en-GB`). |
 | `authentication.providers.<id>.clientId` / `clientSecret` | `NUXT_AUTHENTICATION_PROVIDERS_<ID>_CLIENT_ID` / `_CLIENT_SECRET` | Enables `google`, `microsoft` (`_TENANT_ID`), `github`, `facebook`, or `oidc` (`_DISCOVERY_URL`, `_NAME`). Register `<base URL>/api/authentication/federation/callback/<id>` with the provider. |
 | `public.authentication.appName` | `NUXT_PUBLIC_AUTHENTICATION_APP_NAME` | Name in authenticator apps and passkey prompts (default: base URL host). |
@@ -121,7 +143,10 @@ pnpm typecheck        # nuxt typecheck (layer, shared, contracts, tests, playgro
 pnpm check            # typecheck + test
 pnpm dev              # run the playground (set AUTHENTICATION_DATABASE_URL)
 pnpm build:playground # production build of the playground
+pnpm test:e2e         # Playwright + axe against the built playground (needs AUTHENTICATION_TEST_DATABASE_URL)
 ```
+
+The playground composes Theme Manager, a private repository pinned by commit as a devDependency. Installing needs read access to `nuxt4-layers/theme-manager`; CI uses the `NUXT4_LAYERS_READ_TOKEN` secret. A small patch in `patches/` corrects an invalid token in Theme Manager's default theme until it is fixed upstream.
 
 Database and end-to-end suites run against a **disposable local PostgreSQL**, never a hosted one. Point `AUTHENTICATION_TEST_DATABASE_URL` at an admin connection (for example `postgres://postgres@localhost:5432/postgres`); each suite creates and drops its own database. Without it those suites are skipped locally and **fail in CI**.
 

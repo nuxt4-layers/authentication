@@ -17,11 +17,14 @@ describe('Authentication public contract', () => {
       'AUTHENTICATION_ERROR_CODES',
       'AUTHENTICATION_ERROR_STATUS',
       'AUTHENTICATION_EVENT_TYPES',
+      'AUTHENTICATION_MESSAGES_EN_GB',
       'AUTHENTICATION_MESSAGE_KINDS',
       'AuthenticationCompositionError',
       'DEFAULT_AUTHENTICATION_POLICY',
+      'formatMessage',
       'isAuthenticationErrorCode',
       'resolveAuthenticationPolicy',
+      'resolveMessage',
     ])
   })
 
@@ -64,6 +67,39 @@ describe('Authentication public contract', () => {
   it('namespaces every event type', () => {
     for (const type of contracts.AUTHENTICATION_EVENT_TYPES) {
       expect(type).toMatch(/^authentication\.[a-z-]+$/)
+    }
+  })
+})
+
+describe('Authentication message catalogue', () => {
+  it('has an en-GB message for every error code', () => {
+    for (const code of contracts.AUTHENTICATION_ERROR_CODES) {
+      expect(contracts.AUTHENTICATION_MESSAGES_EN_GB, code).toHaveProperty(`authentication.error.${code}`)
+    }
+  })
+
+  it('has a message for every federation outcome', () => {
+    for (const outcome of ['cancelled', 'link-required', 'link-failed', 'failed']) {
+      expect(contracts.AUTHENTICATION_MESSAGES_EN_GB).toHaveProperty(`authentication.federation.${outcome}`)
+    }
+  })
+
+  it('prefers host overrides for the active locale, then en-GB, then the key', () => {
+    const overrides = { 'cy-GB': { 'authentication.signIn.title': 'Mewngofnodi' } }
+    expect(contracts.resolveMessage('authentication.signIn.title', 'cy-GB', overrides)).toBe('Mewngofnodi')
+    expect(contracts.resolveMessage('authentication.signUp.title', 'cy-GB', overrides)).toBe('Create an account')
+    expect(contracts.resolveMessage('authentication.unknown.key', 'en-GB', undefined)).toBe('authentication.unknown.key')
+  })
+
+  it('fills placeholders and leaves unknown ones visible', () => {
+    expect(contracts.formatMessage('At least {min} characters', { min: 15 })).toBe('At least 15 characters')
+    expect(contracts.formatMessage('Hello {name}')).toBe('Hello {name}')
+  })
+
+  it('uses only placeholders that the components supply', () => {
+    const allowed = new Set(['min', 'email', 'provider', 'count', 'name', 'time', 'device'])
+    for (const [key, template] of Object.entries(contracts.AUTHENTICATION_MESSAGES_EN_GB)) {
+      for (const [, name] of template.matchAll(/\{(\w+)\}/g)) expect(allowed, `${key} uses {${name}}`).toContain(name)
     }
   })
 })

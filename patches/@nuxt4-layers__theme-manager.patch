@@ -1,0 +1,9 @@
+diff --git a/assets/css/theme/theme-default.css b/assets/css/theme/theme-default.css
+--- a/assets/css/theme/theme-default.css
++++ b/assets/css/theme/theme-default.css
+@@ -876,4 +876,4 @@
+   --ui-radius-xl: 16px;
+   --ui-radius-DEFAULT: var(--radius-md);
+-  --ui-radius-full: var(calc(infinity * 1px));
++  --ui-radius-full: calc(infinity * 1px);
+   --ui-shadow-sm-base: 0 1px 2px 0 var(--color-fill-base-shadow);

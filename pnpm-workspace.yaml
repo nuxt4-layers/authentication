@@ -1,0 +1,8 @@
+onlyBuiltDependencies:
+  - "@nuxt4-layers/theme-manager"
+
+# Theme Manager at the pinned commit declares `--ui-radius-full: var(calc(...))`,
+# which is invalid; Tailwind's production optimiser then drops every theme
+# token declared before it. Remove once fixed upstream.
+patchedDependencies:
+  "@nuxt4-layers/theme-manager": patches/@nuxt4-layers__theme-manager.patch

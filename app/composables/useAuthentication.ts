@@ -54,7 +54,8 @@ export function useAuthentication() {
 
   async function call<T>(path: string, body?: Record<string, unknown>, method: 'POST' | 'GET' | 'DELETE' = 'POST'): Promise<AuthenticationResult<T>> {
     try {
-      const data = await $fetch(`${BASE}${path}`, { method, body }) as T
+      // useRequestFetch forwards the browser's cookie when this runs during SSR.
+      const data = await requestFetch(`${BASE}${path}`, { method, body }) as T
       return { ok: true, data }
     }
     catch (error) {
