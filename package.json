@@ -53,7 +53,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@nuxt/test-utils": "^4.3.3",
-    "@nuxt4-layers/theme-manager": "github:nuxt4-layers/theme-manager#bfdf66abffaf140ff88fb7bb89512f2daeccb901",
+    "@nuxt4-layers/theme-manager": "git+https://github.com/nuxt4-layers/theme-manager.git#bfdf66abffaf140ff88fb7bb89512f2daeccb901",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.6",
