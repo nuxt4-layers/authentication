@@ -51,7 +51,7 @@ onMounted(() => {
     <form v-else-if="stage === 'scan'" :class="authenticationClasses.stack" method="post" novalidate @submit.prevent="confirm">
       <p :class="authenticationClasses.text">{{ t('authentication.mfa.totpScan') }}</p>
       <!-- eslint-disable-next-line vue/no-v-html -- SVG generated locally from the server-issued provisioning URI -->
-      <div class="mx-auto w-48 rounded-md bg-fill-base-default p-2" role="img" :aria-label="t('authentication.mfa.totpQrLabel')" v-html="qr" />
+      <div class="mx-auto w-full max-w-xs rounded-md bg-fill-base-default p-2" role="img" :aria-label="t('authentication.mfa.totpQrLabel')" v-html="qr" />
       <p :class="authenticationClasses.text">
         {{ t('authentication.mfa.totpKey') }}:
         <code :class="authenticationClasses.code" data-testid="totp-key" :data-uri="uri">{{ setupKey }}</code>

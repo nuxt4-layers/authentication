@@ -147,7 +147,7 @@ pnpm build:playground # production build of the playground
 pnpm test:e2e         # Playwright + axe against the built playground (needs AUTHENTICATION_TEST_DATABASE_URL)
 ```
 
-The playground composes [Theme Manager](https://github.com/nuxt4-layers/theme-manager), pinned by commit as a devDependency. Hosts installing the layer from Git do not get it: the package has no install-time scripts, so only its runtime dependencies are installed.
+The playground composes [Theme Manager](https://github.com/nuxt4-layers/theme-manager) v0.1.0, pinned by its release commit as a devDependency. Hosts installing the layer from Git do not get it: the package has no install-time scripts, so only its runtime dependencies are installed.
 
 Database and end-to-end suites run against a **disposable local PostgreSQL**, never a hosted one. Point `AUTHENTICATION_TEST_DATABASE_URL` at an admin connection (for example `postgres://postgres@localhost:5432/postgres`); each suite creates and drops its own database. Without it those suites are skipped locally and **fail in CI**.
 
