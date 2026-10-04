@@ -9,6 +9,7 @@ Better Auth is the private engine (from phase 2) and must never appear in `contr
 - `pnpm install`, then `pnpm dev:prepare` for Nuxt types. Never add a `prepare`/`postinstall` script: Git installs would then pull devDependencies (Theme Manager, Playwright) into hosts
 - `pnpm check` = `nuxt typecheck` + `vitest run`; run it after every code change
 - `pnpm build:playground` proves the layer composes in a host
+- Theme Manager is pinned as `git+https://github.com/...#<sha>`; the lockfile must not record `git@github.com` (CI has no SSH key). Cloud sessions inject SSH-to-HTTPS rewrites that make pnpm pick SSH: re-resolve with `GIT_CONFIG_COUNT=1 pnpm install`
 - Single test file: `pnpm vitest run tests/<name>.test.ts`
 - Database and end-to-end suites need `AUTHENTICATION_TEST_DATABASE_URL` (admin URL of a local, disposable PostgreSQL). They skip locally without it and fail in CI.
 - End-to-end: `pnpm test:e2e` (builds the playground, then Playwright). Locally, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if Playwright's own browser is not installed.
