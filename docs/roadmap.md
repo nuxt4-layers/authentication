@@ -7,15 +7,15 @@ Each phase is delivered as its own pull request with tests, and keeps `pnpm chec
 | 1. Foundation | Package, manifest, public contract, composition ports (fail closed), policy, docs, threat model, CI, playground | Complete |
 | 2. Core | Better Auth engine (private), PostgreSQL schema and migrations, email and password, email verification, password reset, sessions (rotation, idle/absolute expiry, revocation, active-session list), throttling and lockout, compromised-password check, `getAuthenticatedPrincipal` / `requireAuthenticatedPrincipal`, `useAuthentication()`, route middleware | Complete |
 | 3. Multi-factor | TOTP with backup codes, passkeys, step-up and re-authentication, MFA-required enrolment flow | Complete |
-| 4. Federation | Google, Microsoft, GitHub, Facebook and generic OIDC; explicit linking by provider subject only; verified-email account creation; provider tokens discarded | In review |
-| 5. Default pages | Accessible (WCAG 2.2 AA), localisable pages styled only through semantic design tokens with fallbacks; host can disable; Playwright end-to-end tests | Planned |
+| 4. Federation | Google, Microsoft, GitHub, Facebook and generic OIDC; explicit linking by provider subject only; verified-email account creation; provider tokens discarded | Complete |
+| 5. Default pages | Accessible (WCAG 2.2 AA), localisable pages and reusable form components styled only through the `SemanticPresentationTheme` vocabulary; host-configurable paths, can be disabled; Playwright and axe end-to-end tests | In review |
 | 6. Host integration | Composition into a host application with its own adapters and negative tests | Planned |
 
 ## Testing infrastructure by phase
 
 - **Phase 1:** Vitest unit and contract tests, `nuxt typecheck`, playground build.
 - **Phase 2:** integration tests against a disposable PostgreSQL. CI uses a service container; Supabase is never used in CI.
-- **Phase 5:** Playwright end-to-end tests against the playground, with automated accessibility checks.
+- **Phase 5:** Playwright end-to-end tests against the built playground composed with Theme Manager: axe (WCAG 2.2 AA rules) in light and dark mode, non-text contrast, reflow, keyboard-only journeys, passkeys through Chromium's virtual authenticator, and a mock OIDC provider. A manual screen-reader audit remains open before 1.0.
 
 ## Deliberate exclusions
 

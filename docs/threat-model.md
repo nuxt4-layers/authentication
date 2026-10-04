@@ -46,6 +46,7 @@ This document records design intent and planned controls. It is not a claim of c
 | T13 | Misconfiguration in a host | Ports fail closed, policy floors validated at startup, secret-strength check at startup | 1, 2 |
 | T14 | Supply-chain compromise | Pinned lockfile, minimal dependencies, Renovate/Dependabot, secret scanning, pinned Action versions | 1, ongoing |
 | T15 | Cross-capability data access | Capability-owned schema (ADR-0002), no cross-schema foreign keys, least-privilege database role | 2 |
+| T16 | Clickjacking, token leakage and cached credentials on the default pages | `frame-ancestors 'none'` and `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` (the reset token is in the URL), `Cache-Control: no-store`; TOTP QR codes rendered locally, never by a third-party service | 5 |
 
 ## 4. Legacy defects this design closes
 
@@ -108,6 +109,11 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | T10 Identity already linked elsewhere cannot be relinked; last sign-in method cannot be unlinked | Implemented (phase 4) | `tests/integration/federation.test.ts` |
 | Provider tokens discarded (the engine would keep OIDC ID tokens in plain text) | Implemented (phase 4) | `tests/integration/federation.test.ts` |
 | Provider MFA not trusted: provider sign-ins are aal1 and step up locally | Implemented (phase 4) | `tests/integration/federation.test.ts` |
+| T16 Default pages refuse framing, caching and referrer leakage | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
+| T16 TOTP QR code rendered in the browser from the provisioning URI; no third-party QR service | Implemented (phase 5) | `app/components/authentication/TotpEnrolment.vue` (review) |
+| Default pages: sign-in returns only to same-origin paths | Implemented (phase 5) | `tests/e2e/pages.spec.ts`, `tests/internals.test.ts` |
+| Default pages: automated WCAG 2.2 AA rules (axe) in light and dark mode, non-text contrast, 320px reflow, keyboard-only journey, announced and focused errors | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
+| Default pages: password managers supported (`autocomplete` `username` or `email`, `current-password`, `new-password`, `one-time-code`; paste allowed; show-password toggle) | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 
 ### ASVS 5.0 mapping (by section)
 
@@ -121,7 +127,7 @@ This maps controls to OWASP ASVS 5.0 chapters and sections. Requirement-level id
 | V6 Authentication: multi-factor | MFA required by default, TOTP replay protection, backup codes hashed and single-use, second-factor lockout |
 | V6 Authentication: cryptographic authenticators | Passkeys with user verification, signature counters checked by the engine |
 | V7 Session management | Opaque server-side tokens, HttpOnly/SameSite cookies, rotation on sign-in and privilege change, idle and absolute timeouts, revocation, active-session list, re-authentication for sensitive operations |
-| V3 Web frontend security (CSRF) | Origin check on state-changing requests, SameSite=Lax |
+| V3 Web frontend security | Origin check on state-changing requests, SameSite=Lax; framing refused and referrer suppressed on the default pages |
 
 ### Known gaps and risk treatment
 
@@ -135,3 +141,5 @@ This maps controls to OWASP ASVS 5.0 chapters and sections. Requirement-level id
 | Facebook never reports email verification | Facebook identities cannot create accounts, only be linked | By design. Documented for hosts. |
 | Only one generic OIDC provider per deployment | Several enterprise IdPs need separate deployments | Revisit when a host needs more than one. |
 | Passkeys need a registrable domain as the relying-party ID | IP-address origins cannot use passkeys in browsers | Production base URLs use a domain. Tests use a software authenticator. |
+| Automated accessibility checks cover only part of WCAG 2.2 AA | Issues axe cannot detect (reading order, meaningful text, screen-reader announcements in context, cognitive load) may remain | Keyboard, focus and announcement journeys are tested in a browser. A manual audit with screen readers (NVDA, VoiceOver) is an open action before 1.0. |
+| Contrast depends on the host's theme | Theme Manager's default palette at the pinned commit fails AA for primary and secondary buttons and for input borders | The required pairings are documented in `docs/contracts.md` §11. The playground composes a corrected palette. Open action: fix the default palette in Theme Manager. |

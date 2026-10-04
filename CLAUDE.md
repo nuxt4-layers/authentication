@@ -11,10 +11,11 @@ Better Auth is the private engine (from phase 2) and must never appear in `contr
 - `pnpm build:playground` proves the layer composes in a host
 - Single test file: `pnpm vitest run tests/<name>.test.ts`
 - Database and end-to-end suites need `AUTHENTICATION_TEST_DATABASE_URL` (admin URL of a local, disposable PostgreSQL). They skip locally without it and fail in CI.
+- End-to-end: `pnpm test:e2e` (builds the playground, then Playwright). Locally, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if Playwright's own browser is not installed.
 - After changing engine options or upgrading the engine, run `tests/database.test.ts`: the drift test demands a new migration if the engine's schema changed. Never edit a released migration.
 
 ## Rules
-- Public surface: package root, `./contracts`, `./capability`, the `provide*`/`migrateAuthenticationDatabase`/`get|requireAuthenticatedPrincipal` server functions, `useAuthentication()`, the `authenticated`/`guest` middleware and `/api/authentication/*`. Everything else (`server/internal`, `server/database`) is private.
+- Public surface: package root, `./contracts`, `./capability`, the `provide*`/`migrateAuthenticationDatabase`/`get|requireAuthenticatedPrincipal` server functions, `useAuthentication()`, the `authenticated`/`guest`/`authentication-signed-in` middleware, the default pages and `Authentication*` components, `useAuthenticationText()`, `./tailwind.css` and `/api/authentication/*`. Everything else (`server/internal`, `server/database`) is private.
 - Engine (Better Auth) routes are never mounted; endpoints call `engine.api.*` server-side and translate errors to contract codes.
 - Engine gaps the layer closes itself (keep their tests): TOTP replay (`totp_last_step`), passkey user verification (engine passes `requireUserVerification: false`), backup codes stored as keyed digests, session freshness from `authenticatedAt` (engine `freshAge` is 0 because it measures `createdAt`).
 - When the engine rotates a session it may return the OLD token; read the new one from Set-Cookie (`sessionTokenFromCookies`) and record its methods with `recordSessionAuthentication`.
@@ -26,4 +27,7 @@ Better Auth is the private engine (from phase 2) and must never appear in `contr
 - No secrets, codes, tokens or email addresses in events or logs.
 - Defaults are secure; loosening policy requires a documented risk treatment.
 - Keep `docs/contracts.md`, `docs/threat-model.md` (control register) and `docs/roadmap.md` in step with code.
+- Default pages and components style only through the SemanticPresentationTheme vocabulary (`authenticationClasses`), never raw colours; text comes from `shared/messages.ts` via `useAuthenticationText()`. Keep every component in `tailwind.css` source paths.
+- Never weaken an axe or contrast assertion to get green: fix the component, or (for palette values) the host theme in the playground, and report Theme Manager palette issues upstream.
+- Client calls that may run during SSR must use `useRequestFetch()` so the session cookie is forwarded.
 - Package manager: pnpm. Commit `pnpm-lock.yaml`.

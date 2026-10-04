@@ -5,7 +5,7 @@
 
 ## 1. Purpose
 
-The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, and the server composition functions listed in §6.
+The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, `@nuxt4-layers/authentication/tailwind.css` (a Tailwind source declaration, §11), the server composition functions listed in §6, and the default pages, components, composables and messages listed in §9 and §11.
 
 Consumers MUST NOT import any other path. The authentication engine, database schema, server utilities and HTTP handler internals are private and may change without a major release.
 
@@ -148,6 +148,7 @@ All endpoints live under `/api/authentication`. Every state-changing request mus
 | `GET /sessions` | | 200 `{ sessions }` | The principal's own `AuthenticationSessionSummary[]`, newest first. |
 | `DELETE /sessions/:id` | | 204 | Revokes one of the principal's own sessions. Another principal's id answers `validation-failed`. |
 | `POST /sessions/revoke-others` | none | 200 `{ status: 'revoked' }` | Revokes every session except the current one. |
+| `GET /policy` | | 200 `{ password: { minLength, maxLength }, mfa, rememberedDevice: { days } }` | The non-secret policy values that forms use to guide people. `Cache-Control: public, max-age=300`. |
 
 ### Multi-factor and step-up endpoints
 
@@ -212,6 +213,7 @@ Named route middleware:
 
 - `authenticated` sends anonymous visitors to `routes.signIn?redirect=<path>`, and sessions below the required level to `routes.mfa?redirect=<path>`.
 - `guest` sends signed-in visitors to the `redirect` query, but only same-origin paths are accepted. Otherwise they go to `routes.afterSignIn`.
+- `authentication-signed-in` admits any signed-in session, including one below the required level. The MFA page uses it so a person can enrol or step up.
 
 Client state and middleware improve the user experience. They are not security enforcement.
 
@@ -222,9 +224,80 @@ These are public runtime config values under `authentication.routes`, and hosts 
 | Key | Default | Used for |
 |---|---|---|
 | `signIn` | `/sign-in` | `authenticated` middleware target and verification-link redirect |
-| `afterSignIn` | `/` | `guest` middleware fallback |
-| `afterSignOut` | `/` | Reserved for the default pages (phase 5) |
+| `signUp` | `/sign-up` | Link from the sign-in page |
+| `forgotPassword` | `/forgot-password` | Link from the sign-in and reset pages |
+| `afterSignIn` | `/` | `guest` middleware fallback and default destination after sign-in |
+| `afterSignOut` | `/` | Destination after signing out from the security page |
 | `resetPassword` | `/reset-password` | Path in password-reset emails (`?token=`) |
 | `mfa` | `/mfa` | `authenticated` middleware target for enrolment or step-up |
+| `security` | `/account/security` | Security settings page |
+
+When the default pages are enabled, the paths chosen in `authentication.pages.paths` (§11) are written into these route values at build time, so links, redirects and emails always point at pages that exist.
 
 `authentication.locale` (default `en-GB`) is passed to the mailer with every message. `authentication.appName` (default: the base URL's host) is shown in authenticator apps and passkey prompts.
+
+## 11. Default pages, components and messages
+
+### Pages
+
+The layer registers six pages. Hosts choose their paths, or turn them off, in `nuxt.config.ts`:
+
+```ts
+export default defineNuxtConfig({
+  extends: ['@nuxt4-layers/authentication'],
+  authentication: {
+    pages: {
+      enabled: true,                       // false: register none, build your own from the components
+      paths: { signIn: '/login' },         // absolute paths; unspecified keys keep their defaults
+    },
+  },
+})
+```
+
+| Key | Default path | Page | Middleware |
+|---|---|---|---|
+| `signIn` | `/sign-in` | Password, second factor, passkey and provider sign-in; verification, reset and federation notices | `guest` |
+| `signUp` | `/sign-up` | Create an account | `guest` |
+| `forgotPassword` | `/forgot-password` | Request a reset link | none |
+| `resetPassword` | `/reset-password` | Choose a new password from the emailed link | none |
+| `mfa` | `/mfa` | Enrol a second factor (authenticator app or passkey) or step up | `authentication-signed-in` |
+| `security` | `/account/security` | Password, authenticator app and backup codes, passkeys, linked providers, sessions | `authenticated` |
+
+Each page has one `<main>` landmark, one `h1`, a document title and the `lang` of `authentication.locale`.
+
+### Components
+
+Auto-imported with the `Authentication` prefix, for hosts that build their own pages: `AuthenticationSignInForm`, `AuthenticationSignUpForm`, `AuthenticationForgotPasswordForm`, `AuthenticationResetPasswordForm`, `AuthenticationMfaPanel`, `AuthenticationTotpEnrolment`, `AuthenticationBackupCodes`, `AuthenticationReauthenticate`, `AuthenticationSecuritySettings`, `AuthenticationProviderButtons`, `AuthenticationField` and `AuthenticationAlert`. Their props and events are documented in each component's header. They render no page chrome, so a host may place them in its own layout.
+
+`authenticationClasses` (auto-imported) holds the utility classes the components use, all taken from the `SemanticPresentationTheme` vocabulary.
+
+### Styling
+
+The components use only `SemanticPresentationTheme` utilities (`bg-fill-*`, `text-pen-*`, `border-edge-*`, `outline-edge-*` and Tailwind's size, spacing and radius scales). A host composing Theme Manager adds the layer's sources to its own Tailwind entry so the utilities are generated:
+
+```css
+@import "@nuxt4-layers/theme-manager/presentation.css";
+@import "@nuxt4-layers/authentication/tailwind.css";
+```
+
+The components rely on these pairings meeting WCAG 2.2 AA in the host's theme, in both light and dark mode:
+
+- text: `pen-<role>` on `fill-<role>` for `primary`, `secondary`, `error`, `success` and `info`, and `pen-base`, `pen-muted` and `pen-link` on `fill-base`: at least 4.5:1;
+- non-text: `edge-input` and `edge-accent` (the focus indicator) against `fill-base` and `fill-floor`: at least 3:1.
+
+### Messages
+
+All text comes from the layer's en-GB catalogue, `AUTHENTICATION_MESSAGES_EN_GB` (exported from `./contracts`). Hosts override wording or add locales in `app.config.ts`:
+
+```ts
+export default defineAppConfig({
+  authentication: {
+    messages: {
+      'en-GB': { 'authentication.signIn.title': 'Log in' },
+      'cy-GB': { 'authentication.signIn.title': 'Mewngofnodi' },
+    },
+  },
+})
+```
+
+The locale is `authentication.locale`. A key resolves to the host override for that locale, then the en-GB default, then the key itself. `{name}` placeholders are filled from parameters, and unknown placeholders stay visible so gaps are noticed. `useAuthenticationText()` returns `{ locale, t }`, and `resolveMessage` and `formatMessage` are exported for server or test use. Each error code `<code>` has the message `authentication.error.<code>`.

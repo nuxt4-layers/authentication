@@ -71,3 +71,10 @@ export type {
   PostgresPoolLike,
 } from '../shared/ports'
 export { AUTHENTICATION_MESSAGE_KINDS } from '../shared/ports'
+
+// ---------------------------------------------------------------------------
+// Messages (default pages and forms)
+// ---------------------------------------------------------------------------
+
+export type { AuthenticationMessageKey, AuthenticationMessages } from '../shared/messages'
+export { AUTHENTICATION_MESSAGES_EN_GB, formatMessage, resolveMessage } from '../shared/messages'

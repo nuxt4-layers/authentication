@@ -16,7 +16,7 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         # Disposable database for integration tests (ADR-0002); never a hosted one.
@@ -41,6 +41,28 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # Theme Manager (a pinned devDependency for the playground and e2e suite)
+      # is a private repository. A fine-grained, read-only token for the
+      # nuxt4-layers organisation is scoped to these URL rewrites only.
+      - name: Authorise read access to nuxt4-layers repositories
+        env:
+          NUXT4_LAYERS_READ_TOKEN: ${{ secrets.NUXT4_LAYERS_READ_TOKEN }}
+        run: |
+          if [ -z "$NUXT4_LAYERS_READ_TOKEN" ]; then
+            echo "::error::The NUXT4_LAYERS_READ_TOKEN repository secret is not set."
+            exit 1
+          fi
+          base="https://x-access-token:${NUXT4_LAYERS_READ_TOKEN}@github.com/nuxt4-layers/"
+          git config --global url."$base".insteadOf "git@github.com:nuxt4-layers/"
+          git config --global --add url."$base".insteadOf "ssh://git@github.com/nuxt4-layers/"
+          git config --global --add url."$base".insteadOf "https://github.com/nuxt4-layers/"
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      - run: pnpm build:playground
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7

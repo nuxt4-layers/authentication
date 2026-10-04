@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "name": "@nuxt4-layers/authentication",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "classification": "foundation",
   "provides": [
     {
@@ -9,17 +9,37 @@
       "contractVersion": "1"
     }
   ],
-  "requires": [],
+  "requires": [
+    {
+      "capability": "SemanticPresentationTheme",
+      "contractVersion": "1",
+      "optional": true,
+      "purpose": "styles the default pages and forms; without it they render unstyled but fully functional"
+    }
+  ],
   "publicExports": [
     ".",
     "./contracts",
-    "./capability"
+    "./capability",
+    "./tailwind.css"
   ],
   "ports": [
-    { "port": "AuthenticationDatabase", "optional": false },
-    { "port": "AuthenticationMailer", "optional": false },
-    { "port": "AuthenticationEventSink", "optional": true },
-    { "port": "AuthenticationPolicy", "optional": true }
+    {
+      "port": "AuthenticationDatabase",
+      "optional": false
+    },
+    {
+      "port": "AuthenticationMailer",
+      "optional": false
+    },
+    {
+      "port": "AuthenticationEventSink",
+      "optional": true
+    },
+    {
+      "port": "AuthenticationPolicy",
+      "optional": true
+    }
   ],
   "integration": {
     "consumers": "consume the AuthenticatedPrincipal contract; do not import authentication internals or engine types",
