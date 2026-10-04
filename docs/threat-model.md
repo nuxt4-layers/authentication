@@ -109,6 +109,9 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | T10 Identity already linked elsewhere cannot be relinked; last sign-in method cannot be unlinked | Implemented (phase 4) | `tests/integration/federation.test.ts` |
 | Provider tokens discarded (the engine would keep OIDC ID tokens in plain text) | Implemented (phase 4) | `tests/integration/federation.test.ts` |
 | Provider MFA not trusted: provider sign-ins are aal1 and step up locally | Implemented (phase 4) | `tests/integration/federation.test.ts` |
+| T14 Actions pinned to commit SHAs; workflow token read-only; CI read token confined to dependency installation | Implemented (phase 6) | `.github/workflows/quality.yml` (review), `docs/repository-security.md` |
+| T14 Install scripts allow-listed; dependencies at least a day old; registry-only transitive dependencies; Dependabot with cooldown; dependency review on pull requests | Implemented (phase 6) | `pnpm-workspace.yaml`, `.github/dependabot.yml`, `.github/workflows/dependency-review.yml` |
+| T14 Repository settings (rulesets, code owners, secret scanning with push protection, CodeQL, private vulnerability reporting) | Checklist (phase 6) | `docs/repository-security.md` |
 | T16 Default pages refuse framing, caching and referrer leakage | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 | T16 Credentials never reach a URL: forms use `method="post"` and stay disabled until hydrated, so no native (GET) submission can happen. Found by host composition, where slower hydration let a sign-in submit as GET | Implemented (phase 6) | `tests/e2e/pages.spec.ts` |
 | T16 TOTP QR code rendered in the browser from the provisioning URI; no third-party QR service | Implemented (phase 5) | `app/components/authentication/TotpEnrolment.vue` (review) |

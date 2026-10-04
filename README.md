@@ -158,6 +158,8 @@ Database and end-to-end suites run against a **disposable local PostgreSQL**, ne
 - [Threat model](docs/threat-model.md)
 - [Roadmap](docs/roadmap.md)
 - [Legacy layer review](docs/legacy-review.md)
+- [Repository security configuration](docs/repository-security.md)
+- [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)
 
 ## License
 

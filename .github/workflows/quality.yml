@@ -33,35 +33,45 @@ jobs:
     env:
       AUTHENTICATION_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       # Theme Manager (a pinned devDependency for the playground and e2e suite)
       # is a private repository. A fine-grained, read-only token for the
-      # nuxt4-layers organisation is scoped to these URL rewrites only.
+      # nuxt4-layers organisation is scoped to these URL rewrites only, written
+      # to a throwaway Git config that exists only for the install step, so no
+      # later step (which runs the pull request's own code) can read it.
+      # Pull requests from forks receive no secrets; see CONTRIBUTING.md.
       - name: Authorise read access to nuxt4-layers repositories
         env:
+          GIT_CONFIG_GLOBAL: ${{ runner.temp }}/nuxt4-layers.gitconfig
           NUXT4_LAYERS_READ_TOKEN: ${{ secrets.NUXT4_LAYERS_READ_TOKEN }}
         run: |
           if [ -z "$NUXT4_LAYERS_READ_TOKEN" ]; then
-            echo "::error::The NUXT4_LAYERS_READ_TOKEN repository secret is not set."
+            echo "::error::The NUXT4_LAYERS_READ_TOKEN secret is unavailable (pull requests from forks do not receive secrets). See CONTRIBUTING.md."
             exit 1
           fi
           base="https://x-access-token:${NUXT4_LAYERS_READ_TOKEN}@github.com/nuxt4-layers/"
           git config --global url."$base".insteadOf "git@github.com:nuxt4-layers/"
           git config --global --add url."$base".insteadOf "ssh://git@github.com/nuxt4-layers/"
           git config --global --add url."$base".insteadOf "https://github.com/nuxt4-layers/"
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        env:
+          GIT_CONFIG_GLOBAL: ${{ runner.temp }}/nuxt4-layers.gitconfig
+        run: pnpm install --frozen-lockfile
+      - name: Remove the read token
+        if: always()
+        run: rm -f "$RUNNER_TEMP/nuxt4-layers.gitconfig"
       - run: pnpm check
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-results
           path: test-results/
