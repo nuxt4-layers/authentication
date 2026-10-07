@@ -43,8 +43,8 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3(@oxc-project/types@0.152.0)(@playwright/test@1.63.0)(esbuild@0.28.2)(h3@1.15.11)(magicast@0.5.5)(nuxt@4.5.2(@babel/plugin-syntax-jsx@7.29.7(@babel/core@7.29.7))(@babel/plugin-syntax-typescript@7.29.7(@babel/core@7.29.7))(@oxc-project/types@0.152.0)(@types/node@24.19.1)(@vue/compiler-sfc@3.5.43)(db0@0.3.4)(esbuild@0.28.2)(ioredis@5.11.1)(lightningcss@1.33.0)(magicast@0.5.5)(rolldown@1.2.12)(rollup-plugin-visualizer@7.1.1(rolldown@1.2.12)(rollup@4.64.0))(rollup@4.64.0)(srvx@0.11.22)(terser@5.51.2)(typescript@6.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2))(vue-tsc@3.3.12(typescript@6.0.3)))(playwright-core@1.63.0)(rolldown@1.2.12)(rollup@4.64.0)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2))(vitest@5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)))(vue@3.5.43(typescript@6.0.3))
       '@nuxt4-layers/theme-manager':
-        specifier: git+https://github.com/nuxt4-layers/theme-manager.git#85c75adf2920249ca1bad0ca9b8114600f3f3531
-        version: git+https://github.com/nuxt4-layers/theme-manager.git#85c75adf2920249ca1bad0ca9b8114600f3f3531
+        specifier: git+https://github.com/nuxt4-layers/theme-manager.git#3f928bcf80bd6e32e0aa991fe0115096a1fe6280
+        version: https://codeload.github.com/nuxt4-layers/theme-manager/tar.gz/3f928bcf80bd6e32e0aa991fe0115096a1fe6280
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -684,8 +684,8 @@ packages:
       rollup-plugin-visualizer:
         optional: true
 
-  '@nuxt4-layers/theme-manager@git+https://github.com/nuxt4-layers/theme-manager.git#85c75adf2920249ca1bad0ca9b8114600f3f3531':
-    resolution: {commit: 85c75adf2920249ca1bad0ca9b8114600f3f3531, repo: https://github.com/nuxt4-layers/theme-manager.git, type: git}
+  '@nuxt4-layers/theme-manager@https://codeload.github.com/nuxt4-layers/theme-manager/tar.gz/3f928bcf80bd6e32e0aa991fe0115096a1fe6280':
+    resolution: {tarball: https://codeload.github.com/nuxt4-layers/theme-manager/tar.gz/3f928bcf80bd6e32e0aa991fe0115096a1fe6280}
     version: 0.1.0
     engines: {node: '>=22'}
 
@@ -4703,7 +4703,7 @@ snapshots:
       - vue-tsc
       - yaml
 
-  '@nuxt4-layers/theme-manager@git+https://github.com/nuxt4-layers/theme-manager.git#85c75adf2920249ca1bad0ca9b8114600f3f3531': {}
+  '@nuxt4-layers/theme-manager@https://codeload.github.com/nuxt4-layers/theme-manager/tar.gz/3f928bcf80bd6e32e0aa991fe0115096a1fe6280': {}
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 
