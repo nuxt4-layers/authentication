@@ -2,6 +2,7 @@ import type {
   AuthenticationDatabase,
   AuthenticationEvent,
   AuthenticationEventSink,
+  AuthenticationIdentity,
   AuthenticationMailer,
   AuthenticationPolicy,
   AuthenticationPolicyInput,
@@ -20,6 +21,7 @@ let database: AuthenticationDatabase | null = null
 let mailer: AuthenticationMailer | null = null
 let eventSink: AuthenticationEventSink | null = null
 let policy: AuthenticationPolicy | null = null
+let identity: AuthenticationIdentity | null = null
 
 export function provideAuthenticationDatabase(next: AuthenticationDatabase): void {
   if (next?.dialect !== 'postgres' || typeof next.pool?.query !== 'function') {
@@ -44,6 +46,23 @@ export function provideAuthenticationEventSink(next: AuthenticationEventSink): v
     throw new TypeError('provideAuthenticationEventSink expects an object with an emit(event) function.')
   }
   eventSink = next
+}
+
+/**
+ * Optional identity port (normally iam-integration's adapter over Identity).
+ * With it, Identity issues account identifiers and decides each account's
+ * standing; without it, the engine issues them and every account is `allowed`.
+ */
+export function provideAuthenticationIdentity(next: AuthenticationIdentity): void {
+  if (typeof next?.reserve !== 'function' || typeof next.confirm !== 'function' || typeof next.standing !== 'function') {
+    throw new TypeError('provideAuthenticationIdentity expects an object with reserve, confirm and standing functions.')
+  }
+  identity = next
+}
+
+/** The identity port, or null when the host supplies none. */
+export function useAuthenticationIdentity(): AuthenticationIdentity | null {
+  return identity
 }
 
 /** Validates and stores the host's policy overrides. Invalid policy throws at startup. */
@@ -87,4 +106,5 @@ export function clearAuthenticationComposition(): void {
   mailer = null
   eventSink = null
   policy = null
+  identity = null
 }

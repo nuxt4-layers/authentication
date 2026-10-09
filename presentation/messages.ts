@@ -118,6 +118,7 @@ export const AUTHENTICATION_MESSAGES_EN_GB = {
 
   // Errors (contract codes)
   'authentication.error.invalid-credentials': 'The email address or password is not right.',
+  'authentication.error.account-restricted': 'Your account cannot do this at the moment.',
   'authentication.error.mfa-required': 'Two-step verification is needed to continue.',
   'authentication.error.invalid-mfa-code': 'That code is not right or has already been used.',
   'authentication.error.email-not-verified': 'Confirm your email address first. We have sent you a new link.',

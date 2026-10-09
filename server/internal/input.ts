@@ -10,6 +10,8 @@ export const emailSchema = z.email().max(254)
 export const passwordSchema = z.string().min(1).max(1024)
 
 export const credentialsBody = z.object({ email: emailSchema, password: passwordSchema }).strict()
+/** Sign-up: an invitation token, when the sign-up comes through an invitation; passed to the identity port, never stored. */
+export const signUpBody = z.object({ email: emailSchema, password: passwordSchema, invitationToken: z.string().min(1).max(512).optional() }).strict()
 export const emailBody = z.object({ email: emailSchema }).strict()
 export const resetBody = z.object({ token: z.string().min(1).max(512), password: passwordSchema }).strict()
 export const changePasswordBody = z.object({ currentPassword: passwordSchema, newPassword: passwordSchema }).strict()

@@ -26,6 +26,7 @@ The single fact authentication publishes:
 | `authenticatedAt` | Time of the most recent primary or step-up authentication. |
 | `expiresAt` | Time after which the session is no longer valid. |
 | `assurance` | `{ level: 'aal1' \| 'aal2', methods, phishingResistant }` |
+| `standing` | What the account may do, from the identity port (§6.1): `allowed`, `resume-only`, `cancel-closure-only` or `verification-only`. Always `allowed` without one. A `refused` account has no principal. |
 
 The principal carries **no tenant, group or role**. Those belong to Identity and Authorization (Platform Architecture §6).
 
@@ -50,7 +51,8 @@ What a protected operation may require of the current session:
 
 - `minimumLevel`;
 - `phishingResistant`;
-- `maxAuthenticationAgeSeconds`, which forces re-authentication for sensitive operations.
+- `maxAuthenticationAgeSeconds`, which forces re-authentication for sensitive operations;
+- `allowStandings`, the standings besides `allowed` the operation accepts (for example `resume-only` to resume a paused account). Any other standing is `account-restricted` (403).
 
 ### `AuthenticationSessionSummary`
 
@@ -70,7 +72,7 @@ Failures from the layer's HTTP endpoints and from `requireAuthenticatedPrincipal
 
 The codes are in `AUTHENTICATION_ERROR_CODES`, and their HTTP statuses are in `AUTHENTICATION_ERROR_STATUS`.
 
-Enumeration resistance is part of the contract. `invalid-credentials` covers unknown accounts, wrong passwords and disabled or locked accounts alike. No code reveals whether an account exists.
+Enumeration resistance is part of the contract. `invalid-credentials` covers unknown accounts, wrong passwords and disabled or locked accounts alike, including an account the identity port refuses or a break-glass account signing in without a passkey. No code reveals whether an account exists.
 
 `AuthenticationCompositionError` is a deployment fault raised when a required port is missing. It is never a user-facing response.
 
@@ -122,11 +124,32 @@ The host supplies these from a Nitro plugin. See [composition-contract.md](compo
 | Function | Port | Required |
 |---|---|---|
 | `provideAuthenticationDatabase` | `AuthenticationDatabase` (`{ dialect: 'postgres', pool, schema? }`) | Yes |
+| `provideAuthenticationIdentity` | `AuthenticationIdentity` (`reserve`, `confirm`, `standing`; §6.1) | No |
 | `provideAuthenticationMailer` | `AuthenticationMailer` (`send(message)`) | Yes |
 | `provideAuthenticationEventSink` | `AuthenticationEventSink` (`emit(event)`) | No |
 | `provideAuthenticationPolicy` | `AuthenticationPolicyInput` | No, the secure defaults apply |
 
 `PostgresPoolLike` is a structural interface satisfied by a `pg` `Pool`. The contract does not depend on the driver package.
+
+### 6.1 Identity port
+
+The identity port tells Authentication whose an account is and whether it may hold a session. The host supplies it, normally through iam-integration's reference adapter over Identity's provisioning port ([provisioning process](https://github.com/nuxt4-layers/iam-integration/blob/38e06eb38c10d7415b93d5ab754a5a4a5b4cc910/docs/processes/provisioning.md)). Without it, the engine issues account identifiers and every account is `allowed`, as before.
+
+| Method | Called | Effect |
+|---|---|---|
+| `reserve({ invitationToken })` | When an account is about to be created (sign-up or a provider's first sign-in) | Its `principalId` becomes the account's identifier. It receives no personal data; `invitationToken` is the sign-up body's, passed through and never stored or logged. A failure refuses the sign-up (`unavailable`) |
+| `confirm(principalId)` | Once the sign-in identifier is verified (the verification link, or a provider-verified address) | Makes the identity usable. Idempotent; a lost confirmation is retried when the account next signs in |
+| `standing(principalId)` | At every sign-in, and on every request with a session | `refused` (or unknown) ends every session and refuses sign-in as `invalid-credentials`; any other standing is carried on the principal; `passkeyOnly` refuses every sign-in but a passkey |
+
+Every call failure fails closed: sign-in, sign-up and requests with a session answer `unavailable` until the port answers again.
+
+The host also acts on Identity's events with these server helpers (§7), although access never depends on them, since every request reads the standing:
+
+| Identity event | Helper |
+|---|---|
+| `identity.paused`, `identity.suspended`, `identity.closure-requested` | `revokeAuthenticationSessions(principalId)` |
+| `identity.provisioning-expired` | `discardAuthenticationAccount(principalId)` (only an unverified account) |
+| `identity.closed` | `deleteAuthenticationAccount(principalId)` (credentials, sessions and the sign-in identifier) |
 
 ## 7. Server helpers
 
@@ -139,6 +162,9 @@ These are auto-imported into the host's server code:
 | `requiredAssuranceLevel()` | `'aal2'` when the policy requires MFA, otherwise `'aal1'`. |
 | `migrateAuthenticationDatabase()` | Applies pending migrations to the capability schema. Requests wait for it to finish. |
 | `getAuthenticationCredentialRecovery(principalId)` | The principal's latest credential recovery (`AuthenticationCredentialRecovery`: `principalId`, `recoveredAt`, `method`), or `null` (§4.1). |
+| `revokeAuthenticationSessions(principalId)` | Ends every session of the principal; returns how many (§6.1). |
+| `discardAuthenticationAccount(principalId)` | Removes an account whose sign-in identifier was never verified; `authentication.account-deleted` (§6.1). |
+| `deleteAuthenticationAccount(principalId)` | Deletes an account with its credentials, sessions and sign-in identifier; `authentication.account-deleted` (§6.1). |
 | `listAuthenticationCredentialRecoveries({ after?, limit? })` | Recoveries in the order they happened, up to `limit` (default 100, at most 1000), with `next` to pass as `after`; a principal recovered again moves to a later page. For the host's reconciliation with Identity (§4.1). |
 
 Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
@@ -149,7 +175,7 @@ All endpoints live under `/api/authentication`. Every state-changing request mus
 
 | Method and path | Body | Success | Notes |
 |---|---|---|---|
-| `POST /sign-up` | `{ email, password }` | 202 `{ status: 'accepted' }` | Identical for new and existing addresses. A verification email is sent to new addresses. |
+| `POST /sign-up` | `{ email, password, invitationToken? }` | 202 `{ status: 'accepted' }` | Identical for new and existing addresses. A verification email is sent to new addresses. |
 | `POST /sign-in` | `{ email, password }` | 200 `{ status: 'signed-in' }` or `{ status: 'second-factor-required', methods: ['totp', 'backup-code'] }` | Signed in: sets the session cookie and replaces any previous session. Second factor required: no session yet, only a 5-minute interim cookie. |
 | `POST /sign-out` | none | 200 `{ status: 'signed-out' }` | Revokes the session server-side. Always succeeds. |
 | `GET /session` | | 200 `{ principal, requiredLevel }` | `principal` is `null` when signed out. A principal below `requiredLevel` must enrol or step up. `Cache-Control: no-store`. |

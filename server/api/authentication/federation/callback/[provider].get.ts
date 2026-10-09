@@ -48,15 +48,21 @@ export default defineEventHandler(async (event) => {
     const context = await runtime.engine.$context
     const session = await context.internalAdapter.findSession(sessionToken)
     if (session) {
-      await completeSignIn(event, runtime, {
-        engineHeaders,
-        sessionToken,
-        userId: session.user.id,
-        methods: ['federated'],
-        previousToken,
-        account: null,
-        client,
-      })
+      try {
+        await completeSignIn(event, runtime, {
+          engineHeaders,
+          sessionToken,
+          userId: session.user.id,
+          methods: ['federated'],
+          previousToken,
+          account: null,
+          client,
+        })
+      }
+      catch {
+        // Refused by the account's standing, or the identity port is down: as coarse as any other failure.
+        return sendRedirect(event, `${runtime.routes.signIn}?federation=failed`, 302)
+      }
       return sendRedirect(event, target, 302)
     }
   }

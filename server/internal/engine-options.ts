@@ -18,6 +18,10 @@ export interface EngineHooks {
   onAccountRegistered(input: { userId: string }): Promise<void>
   onEmailVerified(input: { userId: string }): Promise<void>
   onIdentityLinked(input: { userId: string, providerId: string }): Promise<void>
+  /** The identifier for a new account from the identity port, or null for the engine's own. Throws to refuse. */
+  reserveIdentity(): Promise<string | null>
+  /** The account's sign-in identifier is verified. */
+  confirmIdentity(input: { userId: string }): Promise<void>
 }
 
 export interface EngineConfig {
@@ -121,6 +125,7 @@ export function buildEngineOptions(config: EngineConfig) {
         await config.hooks?.sendVerificationEmail({ email: user.email, token })
       },
       afterEmailVerification: async (user) => {
+        await config.hooks?.confirmIdentity({ userId: user.id })
         await config.hooks?.onEmailVerified({ userId: user.id })
       },
     },
@@ -217,11 +222,16 @@ export function buildEngineOptions(config: EngineConfig) {
           // Names and pictures are personal data owned by Profile (ADR-0005):
           // the engine copies them from the provider's profile, so they are
           // blanked here and never stored.
+          // With an identity port, the account's identifier is Identity's,
+          // reserved before the account exists; a failure refuses the sign-up.
           before: async (user, context) => {
             if (context?.path?.startsWith('/callback/') && !user.emailVerified) return false
-            return { data: { ...user, name: '', image: null } }
+            const id = await config.hooks?.reserveIdentity() ?? null
+            return { data: { ...user, ...(id ? { id } : {}), name: '', image: null } }
           },
           after: async (user) => {
+            // A provider-verified account needs no further verification.
+            if (user.emailVerified) await config.hooks?.confirmIdentity({ userId: user.id })
             await config.hooks?.onAccountRegistered({ userId: user.id })
           },
         },

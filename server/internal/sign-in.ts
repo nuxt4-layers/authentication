@@ -1,9 +1,10 @@
 import type { H3Event } from 'h3'
 import type { AuthenticationEventClient, AuthenticationMethod } from '../../contracts'
-import { forwardCookies } from './http'
+import { authenticationError, forwardCookies } from './http'
 import { recordSessionAuthentication } from './mfa'
 import { forgetPrincipal } from './nitro'
 import { systemEvent, type AuthenticationRuntime } from './runtime'
+import { IdentityPortFailure, signInRefusal } from './standing'
 import type { ThrottleKey } from './throttle'
 
 /** PRIVATE. Steps shared by every way of completing a sign-in. */
@@ -23,6 +24,22 @@ export async function completeSignIn(event: H3Event, runtime: AuthenticationRunt
   account: ThrottleKey | null
   client: AuthenticationEventClient
 }): Promise<void> {
+  // The account's standing decides whether the new session may exist at all;
+  // a refusal reads like a wrong password, so it reveals nothing.
+  let refusal: string | null
+  try {
+    refusal = signInRefusal(await runtime.standing.of(input.userId), input.methods)
+  }
+  catch (error) {
+    if (!(error instanceof IdentityPortFailure)) throw error
+    refusal = 'identity-unavailable'
+  }
+  if (refusal) {
+    const context = await runtime.engine.$context
+    await context.internalAdapter.deleteSession(input.sessionToken)
+    await runtime.emit(systemEvent('authentication.sign-in-failed', input.userId, { method: input.methods.at(-1) ?? null, reason: refusal, client: input.client }))
+    throw authenticationError(refusal === 'identity-unavailable' ? 'unavailable' : 'invalid-credentials')
+  }
   await recordSessionAuthentication(runtime, input.sessionToken, input.methods)
   forwardCookies(event, input.engineHeaders)
   // Session fixation: the request's previous session does not survive a new sign-in.

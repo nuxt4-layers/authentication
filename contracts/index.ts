@@ -92,3 +92,10 @@ export type {
   PostgresPoolLike,
 } from '../shared/ports'
 export { AUTHENTICATION_MESSAGE_KINDS } from '../shared/ports'
+
+// ---------------------------------------------------------------------------
+// Identity port (optional)
+// ---------------------------------------------------------------------------
+
+export type { AuthenticationAccountStanding, AuthenticationIdentity, AuthenticationStanding } from '../shared/identity'
+export { AUTHENTICATION_STANDINGS } from '../shared/identity'
