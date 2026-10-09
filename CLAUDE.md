@@ -26,6 +26,7 @@ Better Auth is the private engine (from phase 2) and must never appear in `contr
 - TOTP tests: each user can use at most the current and next time step without waiting; use `safeStep()` and fresh accounts.
 - Required ports fail closed. No implicit in-memory or file fallback stores.
 - Authentication is tenant-agnostic. No roles, groups, tenants or profile data here.
+- Never a source of profile data. Sign-in identifiers are Authentication's (ADR-0006 §6) and are used only for signing in, recovery and security notices. Names, pictures and anything else that describes a person are Profile's, as are the workflows over them: the engine's `name` stays `''` and `image` `null` (user.create.before hook), and nothing here stores, serves or seeds profile attributes.
 - No secrets, codes, tokens or email addresses in events or logs.
 - Defaults are secure; loosening policy requires a documented risk treatment.
 - Keep `docs/contracts.md`, `docs/threat-model.md` (control register) and `docs/roadmap.md` in step with code.

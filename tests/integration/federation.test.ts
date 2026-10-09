@@ -20,7 +20,7 @@ const ORIGIN = `http://127.0.0.1:${PORT}`
 const database = hasDatabase ? await createTestDatabase() : null
 const { Browser, recorder, lastMessage, freshEmail, verifiedAccount } = createHarness(ORIGIN)
 
-interface Identity { sub: string, email: string, email_verified: boolean }
+interface Identity { sub: string, email: string, email_verified: boolean, name?: string, picture?: string }
 let identity: Identity = { sub: 'nobody', email: 'nobody@example.com', email_verified: true }
 
 const idp = new OAuth2Server()
@@ -37,7 +37,7 @@ if (hasDatabase) {
 
 let subjects = 0
 const newIdentity = (overrides: Partial<Identity> = {}): Identity =>
-  ({ sub: `subject-${++subjects}-${Date.now()}`, email: freshEmail(), email_verified: true, ...overrides })
+  ({ sub: `subject-${++subjects}-${Date.now()}`, email: freshEmail(), email_verified: true, name: 'Alice Example', picture: 'https://idp.example.test/alice.png', ...overrides })
 
 /** Follows a provider round trip: our start/link URL → mock IdP → our callback → final redirect. */
 async function roundTrip(browser: HarnessBrowser, providerUrl: string) {
@@ -114,6 +114,14 @@ describe.skipIf(!hasDatabase)('federated sign-in (mock OIDC provider)', async ()
     expect(principal.assurance).toEqual({ level: 'aal1', methods: ['federated'], phishingResistant: false })
     const { rows } = await query(`select u."emailVerified", a."providerId", a."accountId" from "authentication"."user" u join "authentication"."account" a on a."userId" = u."id" where u."id" = $1`, [principal.principalId])
     expect(rows).toEqual([{ emailVerified: true, providerId: 'oidc', accountId: as.sub }])
+  })
+
+  it('stores no name or picture from the provider: they are Profile\'s', async () => {
+    const browser = new Browser()
+    await federatedSignIn(browser, newIdentity())
+    const principal = (await browser.principal())!
+    const { rows } = await query(`select "name", "image" from "authentication"."user" where "id" = $1`, [principal.principalId])
+    expect(rows).toEqual([{ name: '', image: null }])
   })
 
   it('keeps no provider tokens at all (identity only)', async () => {

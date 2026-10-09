@@ -37,6 +37,14 @@ create index "passkey_credentialID_idx" on {{schema}}."passkey" ("credentialID")
 create table {{schema}}."totp_last_step" ("user_id" text not null primary key references {{schema}}."user" ("id") on delete cascade, "step" bigint not null);
 `,
   },
+  {
+    // Data only. Earlier releases stored the name and picture a provider
+    // supplied at federated sign-up; both are Profile's (ADR-0005).
+    id: '0003_no_names_or_images',
+    sql: `
+update {{schema}}."user" set "name" = '', "image" = null where "name" <> '' or "image" is not null;
+`,
+  },
 ]
 
 const SCHEMA_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/

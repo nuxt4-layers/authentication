@@ -41,6 +41,18 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
     expect(rows.map(row => row.table_name)).toEqual(['account', 'passkey', 'schema_migration', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
   })
 
+  it('blanks names and pictures stored by earlier releases (0003)', async () => {
+    await pool.query(`insert into "authentication"."user" ("id", "name", "email", "emailVerified", "image") values ('legacy-federated', 'Alice Example', 'legacy@example.test', true, 'https://idp.example.test/alice.png'), ('legacy-email', '', 'plain@example.test', true, null)`)
+    const migration = AUTHENTICATION_MIGRATIONS.find(m => m.id === '0003_no_names_or_images')!
+    await pool.query(migration.sql.replaceAll('{{schema}}', quoteSchema('authentication')))
+    const { rows } = await pool.query(`select "id", "name", "image" from "authentication"."user" where "id" like 'legacy-%' order by "id"`)
+    expect(rows).toEqual([
+      { id: 'legacy-email', name: '', image: null },
+      { id: 'legacy-federated', name: '', image: null },
+    ])
+    await pool.query(`delete from "authentication"."user" where "id" like 'legacy-%'`)
+  })
+
   it('matches the engine schema exactly (drift check on engine upgrades)', async () => {
     const options = buildEngineOptions({
       pool,

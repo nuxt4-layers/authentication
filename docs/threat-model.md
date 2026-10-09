@@ -46,6 +46,7 @@ This document records design intent and planned controls. It is not a claim of c
 | T13 | Misconfiguration in a host | Ports fail closed, policy floors validated at startup, secret-strength check at startup | 1, 2 |
 | T14 | Supply-chain compromise | Pinned lockfile, minimal dependencies, Renovate/Dependabot, secret scanning, pinned Action versions | 1, ongoing |
 | T15 | Cross-capability data access | Capability-owned schema (ADR-0002), no cross-schema foreign keys, least-privilege database role | 2 |
+| T17 | Authentication becomes a second, uncontrolled source of personal data (names, pictures from providers), escaping Profile's disclosure, correction and erasure | Store nothing that describes a person: the engine's `name` is always empty and `image` null, whatever a provider supplies; never serve or seed profile attributes. Profile is the only canonical source of such data and of the workflows over it (ADR-0005 §1, ADR-0006 §2) | 6 |
 | T16 | Clickjacking, token leakage and cached credentials on the default pages | `frame-ancestors 'none'` and `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` (the reset token is in the URL), `Cache-Control: no-store`; TOTP QR codes rendered locally, never by a third-party service | 5 |
 
 ## 4. Legacy defects this design closes
@@ -115,6 +116,7 @@ Phase 2 and 3 tests include explicit negative cases for each.
 | T16 Default pages refuse framing, caching and referrer leakage | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 | T16 Credentials never reach a URL: forms use `method="post"` and stay disabled until hydrated, so no native (GET) submission can happen. Found by host composition, where slower hydration let a sign-in submit as GET | Implemented (phase 6) | `tests/e2e/pages.spec.ts` |
 | T16 TOTP QR code rendered in the browser from the provisioning URI; no third-party QR service | Implemented (phase 5) | `presentation/components/TotpEnrolment.vue` (review) |
+| T17 Federated sign-up stores no provider name or picture; migration `0003_no_names_or_images` blanks any stored by earlier releases | Implemented (phase 6) | `tests/integration/federation.test.ts`, `tests/database.test.ts` |
 | Default pages: sign-in returns only to same-origin paths | Implemented (phase 5) | `tests/e2e/pages.spec.ts`, `tests/internals.test.ts` |
 | Default pages: automated WCAG 2.2 AA rules (axe) in light and dark mode, non-text contrast, 320px reflow, keyboard-only journey, announced and focused errors | Implemented (phase 5) | `tests/e2e/pages.spec.ts` |
 | Presentation separated from the core: the core never imports it, it reaches the server only through the client API, and `presentation: false` registers none of it | Implemented (phase 6) | `tests/architecture.test.ts` |

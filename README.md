@@ -21,8 +21,8 @@ It is designed to be composed into a host application as a black box: the host s
 
 | Owns | Does not own |
 |---|---|
-| Credentials (passwords, passkeys, TOTP, backup codes) | Profiles, display names, avatars (Identity) |
-| Sign-in, sign-up, sign-out, email verification, password reset | Groups, organisations, tenancy (Identity) |
+| Credentials (passwords, passkeys, TOTP, backup codes) | Names, pictures and every other piece of personal data that describes a person, and the workflows over it (Profile) |
+| Sign-in, sign-up, sign-out, email verification, password reset | Identities, groups, organisations, tenancy (Identity) |
 | Sessions: creation, rotation, expiry, revocation, active-session list | Permissions, roles, policy decisions (Authorization) |
 | Multi-factor enrolment, step-up and re-authentication | Compliance records, KYC, consent (Privacy) |
 | Federated sign-in and safe account linking | Navigation, theming, application layouts |
