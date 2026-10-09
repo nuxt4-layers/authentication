@@ -54,6 +54,21 @@ export default defineEventHandler(async (event) => {
     throw authenticationError('invalid-mfa-code')
   }
 
+  if (method === 'backup-code') {
+    // A backup code stands in for a lost second factor: a credential recovery.
+    // Recorded before the session is handed over; if it cannot be, the
+    // sign-in fails closed rather than skipping Identity's recovery hold.
+    try {
+      await runtime.recoveries.record(user.id, 'backup-code')
+    }
+    catch (error) {
+      console.error('[authentication] recording a credential recovery failed:', error instanceof Error ? error.message : error)
+      const context = await runtime.engine.$context
+      await context.internalAdapter.deleteSession(token)
+      throw authenticationError('unavailable')
+    }
+  }
+
   await completeSignIn(event, runtime, {
     engineHeaders: result.headers,
     sessionToken: token,
@@ -67,6 +82,7 @@ export default defineEventHandler(async (event) => {
     const context = await runtime.engine.$context
     const owner = await context.internalAdapter.findUserById(user.id)
     await runtime.emit(systemEvent('authentication.backup-code-used', user.id, { method, client }))
+    await runtime.emit(systemEvent('authentication.credentials-recovered', user.id, { method, reason: 'backup-code', client }))
     if (owner) await runtime.notify(owner.email, 'authentication.backup-code-used')
   }
   return { status: 'signed-in' as const }

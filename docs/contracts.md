@@ -84,6 +84,12 @@ Events MUST NOT contain credentials, one-time codes, tokens, session secrets or 
 
 Delivery is best effort. A failing sink is reported, but it never changes the outcome of the operation.
 
+### 4.1 Credential recovery
+
+A **password reset** and a **sign-in with a backup code** are credential recoveries. Each records, in the layer's own `credential_recovery` table, when the principal's credentials were last recovered and how (`AUTHENTICATION_RECOVERY_METHODS`: `password-reset`, `backup-code`), and then emits `authentication.credentials-recovered` (with `method` `password` or `backup-code` and the recovery method as `reason`).
+
+The record is part of the recovery: if it cannot be written, the reset fails, and a backup-code sign-in is refused (`unavailable`) and its new session removed. The host relays the event to Identity's `recordIdentityCredentialRecovery`, which holds `critical` governance changes the person requests soon afterwards (iam-integration's [recovery process](https://github.com/nuxt4-layers/iam-integration/blob/38e06eb38c10d7415b93d5ab754a5a4a5b4cc910/docs/processes/recovery.md)). Because event delivery is best effort, the host also reconciles from the records with `listAuthenticationCredentialRecoveries` (§7), so a lost event never skips the hold. Records hold only the principal, a time and a method code, and are deleted with the account.
+
 ## 5. Configuration contract: `AuthenticationPolicy`
 
 `resolveAuthenticationPolicy(input)` merges host overrides onto `DEFAULT_AUTHENTICATION_POLICY` and validates the result. Unknown keys and values below the enforced floors are rejected.
@@ -132,6 +138,8 @@ These are auto-imported into the host's server code:
 | `requireAuthenticatedPrincipal(event, requirement?)` | The principal, or throws `unauthenticated` (401), `insufficient-assurance` (403) or `reauthentication-required` (401). `minimumLevel` **defaults to the policy's required level**: `aal2` while `mfa: 'required'` (the default). Pass `{ minimumLevel: 'aal1' }` to accept sessions that have not completed a second factor. |
 | `requiredAssuranceLevel()` | `'aal2'` when the policy requires MFA, otherwise `'aal1'`. |
 | `migrateAuthenticationDatabase()` | Applies pending migrations to the capability schema. Requests wait for it to finish. |
+| `getAuthenticationCredentialRecovery(principalId)` | The principal's latest credential recovery (`AuthenticationCredentialRecovery`: `principalId`, `recoveredAt`, `method`), or `null` (§4.1). |
+| `listAuthenticationCredentialRecoveries({ after?, limit? })` | Recoveries in the order they happened, up to `limit` (default 100, at most 1000), with `next` to pass as `after`; a principal recovered again moves to a later page. For the host's reconciliation with Identity (§4.1). |
 
 Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
 

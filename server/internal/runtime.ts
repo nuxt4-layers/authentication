@@ -9,6 +9,7 @@ import type {
 import { createHibpCheck, noCompromisedPasswordCheck, type CompromisedPasswordCheck } from './compromised-password'
 import { buildEngineOptions } from './engine-options'
 import type { EnabledProvider } from './federation-config'
+import { createCredentialRecoveries, type CredentialRecoveries } from './recovery'
 import { accountKey, createSignInThrottle, type SignInThrottle } from './throttle'
 
 /**
@@ -46,6 +47,8 @@ export interface AuthenticationRuntime {
   /** The engine secret, also used as the key for backup-code digests. */
   secret: string
   throttle: SignInThrottle
+  /** Durable credential recovery records (for Identity's recovery hold). */
+  recoveries: CredentialRecoveries
   policy: AuthenticationPolicy
   isCompromisedPassword: CompromisedPasswordCheck
   baseUrl: string
@@ -111,6 +114,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     send({ kind: 'security-notification', to, actionUrl: null, expiresAt: null, eventType })
 
   const throttle = createSignInThrottle(database.pool, database.schema, policy.signInThrottle)
+  const recoveries = createCredentialRecoveries(database.pool, database.schema)
 
   const engine = createEngine(buildEngineOptions({
     pool: database.pool,
@@ -142,7 +146,10 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
       },
       async onPasswordReset({ userId, email }) {
         await throttle.clear(accountKey(email))
+        // Recorded before anything is announced; a failure fails the reset, so no recovery goes unrecorded.
+        await recoveries.record(userId, 'password-reset')
         await emit(systemEvent('authentication.password-reset-completed', userId))
+        await emit(systemEvent('authentication.credentials-recovered', userId, { method: 'password', reason: 'password-reset' }))
         await notify(email, 'authentication.password-reset-completed')
       },
       async onAccountRegistered({ userId }) {
@@ -170,6 +177,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     database,
     secret: input.secret,
     throttle,
+    recoveries,
     policy,
     isCompromisedPassword: policy.password.compromisedCheck === 'hibp-range'
       ? createHibpCheck(input.fetch)

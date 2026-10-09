@@ -48,6 +48,17 @@ export type {
 export { AUTHENTICATION_EVENT_TYPES } from '../shared/events'
 
 // ---------------------------------------------------------------------------
+// Credential recovery
+// ---------------------------------------------------------------------------
+
+export type {
+  AuthenticationCredentialRecovery,
+  AuthenticationCredentialRecoveryPage,
+  AuthenticationRecoveryMethod,
+} from '../shared/recovery'
+export { AUTHENTICATION_RECOVERY_METHODS } from '../shared/recovery'
+
+// ---------------------------------------------------------------------------
 // Policy
 // ---------------------------------------------------------------------------
 
