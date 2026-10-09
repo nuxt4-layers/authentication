@@ -214,9 +214,12 @@ export function buildEngineOptions(config: EngineConfig) {
       user: {
         create: {
           // Provider sign-up only with an email the provider has verified.
+          // Names and pictures are personal data owned by Profile (ADR-0005):
+          // the engine copies them from the provider's profile, so they are
+          // blanked here and never stored.
           before: async (user, context) => {
             if (context?.path?.startsWith('/callback/') && !user.emailVerified) return false
-            return { data: user }
+            return { data: { ...user, name: '', image: null } }
           },
           after: async (user) => {
             await config.hooks?.onAccountRegistered({ userId: user.id })

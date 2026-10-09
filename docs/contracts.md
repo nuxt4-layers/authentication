@@ -183,6 +183,8 @@ Access levels:
 
 Providers: `google`, `microsoft`, `github`, `facebook` and one generic `oidc` provider. Each is enabled only when configured.
 
+A provider's profile claims (name, picture, locale and so on) are discarded: Authentication keeps only the provider subject and the verified email it signs in with. Personal data that describes a person is Profile's, and Profile is its only canonical source; Authentication never stores, serves or seeds it.
+
 | Method and path | Access | Body | Success | Notes |
 |---|---|---|---|---|
 | `GET /federation/providers` | none | | 200 `{ providers: [{ id, name }] }` | |

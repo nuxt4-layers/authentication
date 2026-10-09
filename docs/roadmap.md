@@ -21,7 +21,7 @@ Each phase is delivered as its own pull request with tests, and keeps `pnpm chec
 
 These came from the legacy layer and are intentionally **not** part of this capability:
 
-- profile data, which goes to Identity;
+- profile data, which goes to Profile (ADR-0005). Authentication is never its canonical source: it stores no name or picture, even when a provider supplies one, and never serves or seeds profile attributes. Importing a provider's claims into a profile, if ever wanted, is a Profile workflow specified in Profile's contract;
 - permissions and roles, which go to Authorization;
 - compliance, KYC and consent records, which go to Privacy;
 - tenancy, which goes to Identity and Authorization;
