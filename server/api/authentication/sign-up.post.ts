@@ -1,20 +1,23 @@
 import { defineEventHandler, setResponseStatus } from 'h3'
 import { requestHeaders, translateEngineError } from '../../internal/http'
-import { credentialsBody, readBodyAs } from '../../internal/input'
+import { readBodyAs, signUpBody } from '../../internal/input'
 import { useAuthenticationRuntime } from '../../internal/nitro'
 import { assertAcceptablePassword } from '../../internal/passwords'
+import { signUpInvitation } from '../../internal/standing'
 
 /**
  * Registers an email and password account. The response is identical whether
  * or not the address already has an account, so it cannot be used to enumerate.
  */
 export default defineEventHandler(async (event) => {
-  const { email, password } = await readBodyAs(event, credentialsBody)
+  const { email, password, invitationToken } = await readBodyAs(event, signUpBody)
   const runtime = await useAuthenticationRuntime()
   await assertAcceptablePassword(runtime, password)
 
   try {
-    await runtime.engine.api.signUpEmail({ body: { email, password, name: '' }, headers: requestHeaders(event) })
+    // The token reaches only the identity port's reserve, for the inviting tenant.
+    await signUpInvitation.run({ invitationToken: invitationToken ?? null }, () =>
+      runtime.engine.api.signUpEmail({ body: { email, password, name: '' }, headers: requestHeaders(event) }))
   }
   catch (error) {
     throw translateEngineError(error)

@@ -45,6 +45,15 @@ create table {{schema}}."totp_last_step" ("user_id" text not null primary key re
 update {{schema}}."user" set "name" = '', "image" = null where "name" <> '' or "image" is not null;
 `,
   },
+  {
+    // When each principal's credentials were last recovered, for Identity's
+    // recovery hold. One row per principal, only ever moved forward.
+    id: '0004_credential_recovery',
+    sql: `
+create table {{schema}}."credential_recovery" ("user_id" text not null primary key references {{schema}}."user" ("id") on delete cascade, "recovered_at" timestamptz not null, "method" text not null check ("method" in ('password-reset', 'backup-code')));
+create index "credential_recovery_recovered_at_idx" on {{schema}}."credential_recovery" ("recovered_at", "user_id");
+`,
+  },
 ]
 
 const SCHEMA_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/

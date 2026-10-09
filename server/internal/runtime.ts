@@ -2,13 +2,17 @@ import { betterAuth } from 'better-auth'
 import type {
   AuthenticationDatabase,
   AuthenticationEvent,
+  AuthenticationIdentity,
   AuthenticationMailer,
   AuthenticationMessage,
   AuthenticationPolicy,
 } from '../../contracts'
+import { quoteSchema } from '../database/migrations'
 import { createHibpCheck, noCompromisedPasswordCheck, type CompromisedPasswordCheck } from './compromised-password'
 import { buildEngineOptions } from './engine-options'
 import type { EnabledProvider } from './federation-config'
+import { createCredentialRecoveries, type CredentialRecoveries } from './recovery'
+import { createStanding, signUpInvitation, type Standing } from './standing'
 import { accountKey, createSignInThrottle, type SignInThrottle } from './throttle'
 
 /**
@@ -27,6 +31,8 @@ export interface AuthenticationRuntimeInput {
   database: AuthenticationDatabase & { schema: string }
   mailer: AuthenticationMailer
   emit: (event: AuthenticationEvent) => Promise<void>
+  /** The host's identity port, read when needed; absent or null runs without one. */
+  identity?: () => AuthenticationIdentity | null
   policy: AuthenticationPolicy
   secret: string
   baseUrl: string
@@ -46,6 +52,10 @@ export interface AuthenticationRuntime {
   /** The engine secret, also used as the key for backup-code digests. */
   secret: string
   throttle: SignInThrottle
+  /** Durable credential recovery records (for Identity's recovery hold). */
+  recoveries: CredentialRecoveries
+  /** Account standing from the identity port; `allowed` without one. */
+  standing: Standing
   policy: AuthenticationPolicy
   isCompromisedPassword: CompromisedPasswordCheck
   baseUrl: string
@@ -111,6 +121,12 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     send({ kind: 'security-notification', to, actionUrl: null, expiresAt: null, eventType })
 
   const throttle = createSignInThrottle(database.pool, database.schema, policy.signInThrottle)
+  const recoveries = createCredentialRecoveries(database.pool, database.schema)
+  const verified = async (principalId: string) => {
+    const result = await database.pool.query(`select "emailVerified" from ${quoteSchema(database.schema)}."user" where "id" = $1`, [principalId]) as { rows: { emailVerified: boolean }[] }
+    return result.rows[0]?.emailVerified === true
+  }
+  const standing = createStanding({ identity: input.identity ?? (() => null), isVerified: verified })
 
   const engine = createEngine(buildEngineOptions({
     pool: database.pool,
@@ -142,8 +158,17 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
       },
       async onPasswordReset({ userId, email }) {
         await throttle.clear(accountKey(email))
+        // Recorded before anything is announced; a failure fails the reset, so no recovery goes unrecorded.
+        await recoveries.record(userId, 'password-reset')
         await emit(systemEvent('authentication.password-reset-completed', userId))
+        await emit(systemEvent('authentication.credentials-recovered', userId, { method: 'password', reason: 'password-reset' }))
         await notify(email, 'authentication.password-reset-completed')
+      },
+      async reserveIdentity() {
+        return standing.reserve(signUpInvitation.getStore()?.invitationToken ?? null)
+      },
+      async confirmIdentity({ userId }) {
+        await standing.confirm(userId)
       },
       async onAccountRegistered({ userId }) {
         await emit(systemEvent('authentication.account-registered', userId))
@@ -170,6 +195,8 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     database,
     secret: input.secret,
     throttle,
+    recoveries,
+    standing,
     policy,
     isCompromisedPassword: policy.password.compromisedCheck === 'hibp-range'
       ? createHibpCheck(input.fetch)

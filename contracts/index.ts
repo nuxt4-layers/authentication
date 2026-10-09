@@ -48,6 +48,17 @@ export type {
 export { AUTHENTICATION_EVENT_TYPES } from '../shared/events'
 
 // ---------------------------------------------------------------------------
+// Credential recovery
+// ---------------------------------------------------------------------------
+
+export type {
+  AuthenticationCredentialRecovery,
+  AuthenticationCredentialRecoveryPage,
+  AuthenticationRecoveryMethod,
+} from '../shared/recovery'
+export { AUTHENTICATION_RECOVERY_METHODS } from '../shared/recovery'
+
+// ---------------------------------------------------------------------------
 // Policy
 // ---------------------------------------------------------------------------
 
@@ -81,3 +92,10 @@ export type {
   PostgresPoolLike,
 } from '../shared/ports'
 export { AUTHENTICATION_MESSAGE_KINDS } from '../shared/ports'
+
+// ---------------------------------------------------------------------------
+// Identity port (optional)
+// ---------------------------------------------------------------------------
+
+export type { AuthenticationAccountStanding, AuthenticationIdentity, AuthenticationStanding } from '../shared/identity'
+export { AUTHENTICATION_STANDINGS } from '../shared/identity'

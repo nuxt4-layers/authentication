@@ -5,6 +5,7 @@ import { runAuthenticationMigrations } from '../database/migrations'
 import {
   emitAuthenticationEvent,
   useAuthenticationDatabase,
+  useAuthenticationIdentity,
   useAuthenticationMailer,
   useAuthenticationPolicy,
 } from '../utils/authentication-composition'
@@ -12,6 +13,7 @@ import { authenticationError, forwardCookies, requestHeaders } from './http'
 import { absoluteExpiry, toPrincipal, type EngineSessionRecord } from './principal'
 import { enabledProviders } from './federation-config'
 import { createAuthenticationRuntime, type AuthenticationRuntime } from './runtime'
+import { IdentityPortFailure } from './standing'
 
 /** PRIVATE. Binds the pure runtime to Nitro: runtime config, ports and per-request caching. */
 
@@ -39,6 +41,7 @@ export async function useAuthenticationRuntime(): Promise<AuthenticationRuntime>
     database,
     mailer: useAuthenticationMailer(),
     emit: emitAuthenticationEvent,
+    identity: useAuthenticationIdentity,
     policy: useAuthenticationPolicy(),
     secret: config.authentication.secret,
     baseUrl: config.authentication.baseUrl,
@@ -80,8 +83,23 @@ export async function resolvePrincipal(event: H3Event): Promise<AuthenticatedPri
       forwardCookies(event, signOut.headers)
     }
     else {
-      principal = toPrincipal(session, lifetime)
-      event.context[TOKEN_KEY] = session.token
+      // Standing is read on every request: a suspended or closed account loses its session at once.
+      let standing
+      try {
+        standing = await runtime.standing.of(session.userId)
+      }
+      catch (error) {
+        if (error instanceof IdentityPortFailure) throw authenticationError('unavailable')
+        throw error
+      }
+      if (standing.standing === 'refused') {
+        const context = await runtime.engine.$context
+        await context.internalAdapter.deleteUserSessions(session.userId)
+      }
+      else {
+        principal = toPrincipal(session, lifetime, standing.standing)
+        event.context[TOKEN_KEY] = session.token
+      }
     }
   }
   event.context[CONTEXT_KEY] = principal

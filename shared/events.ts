@@ -21,6 +21,8 @@ export const AUTHENTICATION_EVENT_TYPES = [
   'authentication.mfa-removed',
   'authentication.backup-codes-regenerated',
   'authentication.backup-code-used',
+  'authentication.credentials-recovered',
+  'authentication.account-deleted',
   'authentication.reauthenticated',
   'authentication.session-revoked',
   'authentication.federated-identity-linked',

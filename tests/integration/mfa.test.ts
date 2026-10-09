@@ -217,6 +217,10 @@ describe.skipIf(!hasDatabase)('multi-factor authentication (mfa required)', asyn
       expect((await browser.principal())!.assurance.methods).toEqual(['password', 'backup-code'])
       expect((await browser.request('/api/authentication/mfa')).data.backupCodes.remaining).toBe(9)
       expect((await lastMessage(email, 'security-notification')).eventType).toBe('authentication.backup-code-used')
+      const recovered = (await recorder()).events.filter(e => e.type === 'authentication.credentials-recovered').at(-1)
+      expect(recovered).toMatchObject({ method: 'backup-code', reason: 'backup-code', principalId: (await browser.principal())!.principalId })
+      const { rows } = await query(`select "method" from "authentication"."credential_recovery" where "user_id" = $1`, [recovered!.principalId])
+      expect(rows).toEqual([{ method: 'backup-code' }])
 
       const reuse = new Browser()
       await reuse.post('/api/authentication/sign-in', { email, password: PASSWORD })

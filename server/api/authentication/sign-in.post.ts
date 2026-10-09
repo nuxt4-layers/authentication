@@ -1,4 +1,4 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, isError } from 'h3'
 import { authenticationError, clientInfo, engineErrorCode, forwardCookies, requestHeaders, translateEngineError } from '../../internal/http'
 import { credentialsBody, readBodyAs } from '../../internal/input'
 import { trustProxy, useAuthenticationRuntime } from '../../internal/nitro'
@@ -60,6 +60,8 @@ export default defineEventHandler(async (event) => {
     return { status: 'signed-in' as const }
   }
   catch (error) {
+    // The layer's own refusals (the account's standing) are already contract errors.
+    if (isError(error)) throw error
     const code = engineErrorCode(error)
     if (code === 'invalid-credentials') {
       const locked = await throttle.recordFailure(account, policy.signInThrottle.maxFailedAttempts)

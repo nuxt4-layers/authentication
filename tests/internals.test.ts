@@ -6,6 +6,7 @@ import { createHibpCheck } from '../server/internal/compromised-password'
 import { buildEngineOptions } from '../server/internal/engine-options'
 import { describeClient, engineErrorCode, safeRedirectPath } from '../server/internal/http'
 import { absoluteExpiry, assuranceLevel, evaluateRequirement, parseMethods, toPrincipal } from '../server/internal/principal'
+import { signInRefusal } from '../server/internal/standing'
 import { validateRuntimeConfig } from '../server/internal/runtime'
 
 describe('engine error translation', () => {
@@ -94,6 +95,7 @@ describe('principal and assurance', () => {
       authenticatedAt: '2026-10-03T10:00:00.000Z',
       expiresAt: '2026-10-03T11:30:00.000Z',
       assurance: { level: 'aal1', methods: ['password'], phishingResistant: false },
+      standing: 'allowed',
     })
     expect(JSON.stringify(principal)).not.toContain('secret-token')
   })
@@ -106,6 +108,23 @@ describe('principal and assurance', () => {
     expect(evaluateRequirement(principal, { phishingResistant: true }, now)).toBe('insufficient-assurance')
     expect(evaluateRequirement(principal, { maxAuthenticationAgeSeconds: 900 }, now)).toBeNull()
     expect(evaluateRequirement(principal, { maxAuthenticationAgeSeconds: 300 }, now)).toBe('reauthentication-required')
+  })
+
+  it('refuses a restricted account unless the operation accepts its standing', () => {
+    const paused = toPrincipal(session, 86_400, 'resume-only')
+    const now = new Date('2026-10-03T10:10:00Z')
+    expect(evaluateRequirement(paused, {}, now)).toBe('account-restricted')
+    expect(evaluateRequirement(paused, { allowStandings: ['cancel-closure-only'] }, now)).toBe('account-restricted')
+    expect(evaluateRequirement(paused, { allowStandings: ['resume-only'] }, now)).toBeNull()
+  })
+
+  it('lets a break-glass account in by passkey alone, and nobody refused', () => {
+    const breakGlass = { standing: 'allowed' as const, passkeyOnly: true }
+    expect(signInRefusal(breakGlass, ['passkey'])).toBeNull()
+    expect(signInRefusal(breakGlass, ['password', 'totp'])).toBe('passkey-only')
+    expect(signInRefusal(breakGlass, ['federated'])).toBe('passkey-only')
+    expect(signInRefusal({ standing: 'refused', passkeyOnly: false }, ['passkey'])).toBe('standing-refused')
+    expect(signInRefusal({ standing: 'resume-only', passkeyOnly: false }, ['password', 'totp'])).toBeNull()
   })
 })
 

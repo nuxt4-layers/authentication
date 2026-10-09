@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolveAuthenticationPolicy } from '../contracts'
 import { AUTHENTICATION_MIGRATIONS, quoteSchema, runAuthenticationMigrations } from '../server/database/migrations'
 import { buildEngineOptions } from '../server/internal/engine-options'
+import { createCredentialRecoveries } from '../server/internal/recovery'
 import { accountKey, clientKey, createSignInThrottle } from '../server/internal/throttle'
 import { createTestDatabase, hasDatabase, requireDatabaseInCi } from './support/database'
 
@@ -38,7 +39,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
       `select table_schema, table_name from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema') order by table_name`,
     )
     expect(rows.every(row => row.table_schema === 'authentication')).toBe(true)
-    expect(rows.map(row => row.table_name)).toEqual(['account', 'passkey', 'schema_migration', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
+    expect(rows.map(row => row.table_name)).toEqual(['account', 'credential_recovery', 'passkey', 'schema_migration', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
   })
 
   it('blanks names and pictures stored by earlier releases (0003)', async () => {
@@ -94,6 +95,37 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
   it('supports a host-chosen schema name and rejects unsafe ones', async () => {
     expect(await runAuthenticationMigrations(pool, 'auth_alt')).toEqual(AUTHENTICATION_MIGRATIONS.map(m => m.id))
     expect(() => quoteSchema('auth"; drop schema public; --')).toThrow(TypeError)
+  })
+
+  describe('credential recovery records', () => {
+    it('keeps each principal\'s latest recovery, never moving it back', async () => {
+      await pool.query(`insert into "authentication"."user" ("id", "name", "email", "emailVerified") values ('recovered-a', '', 'a@recovery.test', true), ('recovered-b', '', 'b@recovery.test', true)`)
+      const recoveries = createCredentialRecoveries(pool, 'authentication')
+      await recoveries.record('recovered-a', 'password-reset', new Date('2026-10-01T10:00:00Z'))
+      await recoveries.record('recovered-a', 'backup-code', new Date('2026-10-01T09:00:00Z'))
+      expect(await recoveries.get('recovered-a')).toEqual({ principalId: 'recovered-a', recoveredAt: '2026-10-01T10:00:00.000Z', method: 'password-reset' })
+      await recoveries.record('recovered-a', 'backup-code', new Date('2026-10-02T10:00:00Z'))
+      expect(await recoveries.get('recovered-a')).toMatchObject({ recoveredAt: '2026-10-02T10:00:00.000Z', method: 'backup-code' })
+      expect(await recoveries.get('recovered-b')).toBeNull()
+    })
+
+    it('pages through recoveries in order, with a cursor that names nobody', async () => {
+      const recoveries = createCredentialRecoveries(pool, 'authentication')
+      await recoveries.record('recovered-b', 'password-reset', new Date('2026-10-03T10:00:00Z'))
+      const first = await recoveries.list({ limit: 1 })
+      expect(first.recoveries.map(r => r.principalId)).toEqual(['recovered-a'])
+      expect(Buffer.from(first.next!, 'base64url').toString()).not.toMatch(/@/)
+      const second = await recoveries.list({ after: first.next, limit: 1 })
+      expect(second.recoveries.map(r => r.principalId)).toEqual(['recovered-b'])
+      expect(second.next).toBeNull()
+      expect((await recoveries.list({ after: second.next ?? undefined })).recoveries).toHaveLength(2)
+      await expect(recoveries.list({ after: 'not-a-cursor' })).rejects.toThrow(TypeError)
+    })
+
+    it('forgets a principal\'s recoveries with the account', async () => {
+      await pool.query(`delete from "authentication"."user" where "id" like 'recovered-%'`)
+      expect((await createCredentialRecoveries(pool, 'authentication').list()).recoveries).toEqual([])
+    })
   })
 
   describe('sign-in throttle', () => {

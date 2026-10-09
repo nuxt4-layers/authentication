@@ -38,6 +38,10 @@
       "optional": true
     },
     {
+      "port": "AuthenticationIdentity",
+      "optional": true
+    },
+    {
       "port": "AuthenticationPolicy",
       "optional": true
     }

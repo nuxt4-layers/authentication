@@ -45,7 +45,7 @@ export function absoluteExpiry(session: EngineSessionRecord, absoluteLifetimeSec
   return absolute < sliding ? absolute : sliding
 }
 
-export function toPrincipal(session: EngineSessionRecord, absoluteLifetimeSeconds: number): AuthenticatedPrincipal {
+export function toPrincipal(session: EngineSessionRecord, absoluteLifetimeSeconds: number, standing: AuthenticatedPrincipal['standing'] = 'allowed'): AuthenticatedPrincipal {
   const methods = parseMethods(session.authenticationMethods)
   return {
     principalId: session.userId,
@@ -57,6 +57,7 @@ export function toPrincipal(session: EngineSessionRecord, absoluteLifetimeSecond
       methods,
       phishingResistant: methods.includes('passkey'),
     },
+    standing,
   }
 }
 
@@ -66,6 +67,7 @@ export function evaluateRequirement(
   requirement: AuthenticationRequirement = {},
   now: Date = new Date(),
 ): AuthenticationErrorCode | null {
+  if (principal.standing !== 'allowed' && !(requirement.allowStandings ?? []).includes(principal.standing)) return 'account-restricted'
   if (requirement.minimumLevel === 'aal2' && principal.assurance.level !== 'aal2') return 'insufficient-assurance'
   if (requirement.phishingResistant && !principal.assurance.phishingResistant) return 'insufficient-assurance'
   if (requirement.maxAuthenticationAgeSeconds !== undefined) {

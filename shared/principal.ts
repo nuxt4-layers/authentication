@@ -1,3 +1,5 @@
+import type { AuthenticationStanding } from './identity'
+
 /**
  * Authenticated principal and session types. Re-exported from the public contract.
  */
@@ -54,6 +56,11 @@ export interface AuthenticatedPrincipal {
   /** ISO 8601 timestamp after which the session is no longer valid. */
   expiresAt: string
   assurance: AuthenticationAssurance
+  /**
+   * What the account may do, from the identity port: `allowed` unless the
+   * host supplies one. A `refused` account never has a principal.
+   */
+  standing: Exclude<AuthenticationStanding, 'refused'>
 }
 
 /** Requirements a protected server operation can place on the current session. */
@@ -64,6 +71,11 @@ export interface AuthenticationRequirement {
   phishingResistant?: boolean
   /** Maximum seconds since `authenticatedAt`; older sessions must re-authenticate. */
   maxAuthenticationAgeSeconds?: number
+  /**
+   * Standings besides `allowed` that the operation accepts, e.g. `resume-only`
+   * for resuming a paused account. Defaults to `allowed` only.
+   */
+  allowStandings?: readonly Exclude<AuthenticationStanding, 'refused' | 'allowed'>[]
 }
 
 /** A session as shown to its owner in an "active sessions" list. */

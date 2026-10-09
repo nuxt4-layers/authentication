@@ -281,6 +281,12 @@ describe.skipIf(!hasDatabase)('authentication HTTP API (composed playground)', a
       expect((await anonymous.post('/api/authentication/sign-in', { email, password: PASSWORD })).status).toBe(401)
       expect((await anonymous.post('/api/authentication/sign-in', { email, password: newPassword })).status).toBe(200)
       expect((await lastMessage(email, 'security-notification')).eventType).toBe('authentication.password-reset-completed')
+      const pool = new pg.Pool({ connectionString: database!.url })
+      const { rows } = await pool.query(`select r."method" from "authentication"."credential_recovery" r join "authentication"."user" u on u."id" = r."user_id" where u."email" = $1`, [email])
+      expect(rows).toEqual([{ method: 'password-reset' }])
+      await pool.end()
+      const { events } = await recorder()
+      expect(events.filter(e => e.type === 'authentication.credentials-recovered').at(-1)).toMatchObject({ method: 'password', reason: 'password-reset' })
     })
 
     it('answers reset requests for unknown addresses identically and sends nothing', async () => {
