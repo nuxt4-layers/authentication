@@ -11,7 +11,8 @@ import { useAuthenticationLegalHolds } from './authentication-composition'
  * maintenance.
  *
  * Applies the policy's retention schedules (iam-integration's retention
- * process): deletes sessions expired more than `retention.sessionDays` ago,
+ * process): deletes sessions expired more than `retention.sessionDays` ago
+ * (by the system clock, the engine's own),
  * break-glass enrolment tokens and verification values expired more than
  * `retention.tokenDays` ago, and credential-recovery records older than
  * `retention.recoveryDays` that no legal hold covers. Emits
@@ -22,6 +23,8 @@ export async function runAuthenticationMaintenance(input: { limit?: number } = {
   const runtime = await useAuthenticationRuntime()
   const retention = await createRetention(runtime.database.pool, runtime.database.schema).apply({
     at: currentTime(),
+    // The engine keeps session and verification expiries on the system clock.
+    engineAt: new Date(),
     retention: runtime.policy.retention,
     holds: useAuthenticationLegalHolds(),
     limit: input.limit,

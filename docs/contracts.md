@@ -444,6 +444,7 @@ Authentication's schedules under iam-integration's [retention process](https://g
 | Credential-recovery records (`credential_recovery`) | The recovery | 1 year | 30 days–2 years | A legal hold on the person |
 | Break-glass enrolment tokens (`break_glass_enrolment`) and the engine's verification values (`verification`) | Expiry. A used token is already gone | 30 days | 1–365 days | Nothing |
 
+- Session and verification expiries are the engine's own times, on the system clock (§6.2), so their periods are judged by the system clock too: a host clock ahead of it never deletes a session the engine still honours. Break-glass tokens and recovery records are judged by the layer's clock, which they were kept by.
 - A period below its default needs `retention.riskTreatment`; a period outside its bounds fails `provideAuthenticationPolicy` at start-up.
 - The shortest recovery period (30 days) outlasts Identity's longest recovery hold (336 hours), so a record is never deleted while the hold it reconciles (§4.1) can still run.
 - Before deleting a credential-recovery record, maintenance asks the host's legal-hold port (`provideAuthenticationLegalHolds`, normally iam-integration's `legalHoldsFromMembers` with the `authentication` part, which reads Profile's holds on people). Without the port, or when it fails or answers anything but `false`, the record is kept for the next run. A record recovered again since the run read it is kept.

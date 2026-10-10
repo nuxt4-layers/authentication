@@ -211,7 +211,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
     })
 
     it('deletes expired sessions and tokens past their periods, and keeps every recovery record without the hold port', async () => {
-      const counts = await createRetention(pool, 'authentication').apply({ at, retention, holds: null })
+      const counts = await createRetention(pool, 'authentication').apply({ at, engineAt: at, retention, holds: null })
       expect(counts).toEqual({ sessions: 1, credentialRecoveries: 0, enrolmentTokens: 1, verifications: 1 })
       expect(await ids('"session"', '"id"')).toEqual(['session-live', 'session-recent'])
       expect(await ids('"verification"', '"id"')).toEqual(['verification-live', 'verification-recent'])
@@ -229,14 +229,22 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
         },
       }
       const retentionRun = createRetention(pool, 'authentication')
-      expect(await retentionRun.apply({ at, retention, holds })).toEqual({ sessions: 0, credentialRecoveries: 0, enrolmentTokens: 0, verifications: 0 })
+      expect(await retentionRun.apply({ at, engineAt: at, retention, holds })).toEqual({ sessions: 0, credentialRecoveries: 0, enrolmentTokens: 0, verifications: 0 })
       expect(asked).toEqual([{ kind: 'person', id: 'kept-a' }, { kind: 'person', id: 'kept-b' }])
       expect(await ids('"credential_recovery"', '"user_id"')).toEqual(['kept-a', 'kept-b', 'kept-c'])
 
       // The hold on kept-a ends and the port answers again: both go; kept-c is still within its period.
-      expect(await retentionRun.apply({ at, retention, holds: { covers: async () => false } }))
+      expect(await retentionRun.apply({ at, engineAt: at, retention, holds: { covers: async () => false } }))
         .toEqual({ sessions: 0, credentialRecoveries: 2, enrolmentTokens: 0, verifications: 0 })
       expect(await ids('"credential_recovery"', '"user_id"')).toEqual(['kept-c'])
+    })
+
+    it('judges sessions and verification values by the engine\'s clock, never a host clock ahead of it', async () => {
+      await pool.query(`insert into "authentication"."session" ("id", "expiresAt", "token", "updatedAt", "userId") values ('session-engine', $1, 'session-engine', $1, 'kept-a')`, [daysBefore(1)])
+      const ahead = new Date(at.getTime() + 400 * 86_400_000)
+      const counts = await createRetention(pool, 'authentication').apply({ at: ahead, engineAt: at, retention, holds: null })
+      expect(counts).toMatchObject({ sessions: 0, verifications: 0 })
+      expect(await ids('"session"', '"id"')).toContain('session-engine')
     })
 
     it('keeps a record recovered again since the run read it', async () => {
@@ -248,7 +256,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
           return false
         },
       }
-      expect((await createRetention(pool, 'authentication').apply({ at, retention, holds })).credentialRecoveries).toBe(0)
+      expect((await createRetention(pool, 'authentication').apply({ at, engineAt: at, retention, holds })).credentialRecoveries).toBe(0)
       expect(await recoveries.get('kept-a')).toMatchObject({ recoveredAt: at.toISOString() })
     })
   })

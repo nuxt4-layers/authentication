@@ -6,7 +6,10 @@ import { quoteSchema } from '../database/migrations'
  * records whose purpose is over, past the policy's periods.
  *
  * - Sessions, from their expiry. A signed-out or revoked session is already
- *   gone; an expired one is kept for `sessionDays`.
+ *   gone; an expired one is kept for `sessionDays`. Session and verification
+ *   expiries are the engine's own times, on the system clock, so they are
+ *   judged by `engineAt`: a host clock ahead of the system clock must never
+ *   delete a session the engine still honours.
  * - Credential-recovery records, from the recovery, unless a legal hold
  *   covers the person. Without the hold port, or when it fails, every record
  *   is kept for the next run.
@@ -24,14 +27,18 @@ export function createRetention(pool: PostgresPoolLike, schema: string) {
     ((await pool.query(text, values)) as { rows: { n: number }[] }).rows[0]?.n ?? 0
 
   return {
-    async apply(input: { at: Date, retention: Retention, holds: AuthenticationLegalHolds | null, limit?: number }): Promise<AuthenticationRetentionCounts> {
-      const { at, retention, holds } = input
+    /**
+     * `at` is the layer's clock (break-glass tokens, recoveries); `engineAt`
+     * the system clock the engine keeps sessions and verification values by.
+     */
+    async apply(input: { at: Date, engineAt: Date, retention: Retention, holds: AuthenticationLegalHolds | null, limit?: number }): Promise<AuthenticationRetentionCounts> {
+      const { at, engineAt, retention, holds } = input
       const limit = Math.min(Math.max(Math.trunc(input.limit ?? 1000), 1), 10_000)
-      const before = (days: number) => new Date(at.getTime() - days * DAY)
+      const before = (days: number, from = at) => new Date(from.getTime() - days * DAY)
 
       const sessions = await count(
         `with gone as (delete from ${s}."session" where "expiresAt" < $1 returning 1) select count(*)::int as n from gone`,
-        [before(retention.sessionDays)],
+        [before(retention.sessionDays, engineAt)],
       )
       const enrolmentTokens = await count(
         `with gone as (delete from ${s}."break_glass_enrolment" where "expires_at" < $1 returning 1) select count(*)::int as n from gone`,
@@ -39,7 +46,7 @@ export function createRetention(pool: PostgresPoolLike, schema: string) {
       )
       const verifications = await count(
         `with gone as (delete from ${s}."verification" where "expiresAt" < $1 returning 1) select count(*)::int as n from gone`,
-        [before(retention.tokenDays)],
+        [before(retention.tokenDays, engineAt)],
       )
 
       let credentialRecoveries = 0
