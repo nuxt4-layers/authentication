@@ -166,6 +166,7 @@ These are auto-imported into the host's server code:
 | `discardAuthenticationAccount(principalId)` | Removes an account whose sign-in identifier was never verified; `authentication.account-deleted` (§6.1). |
 | `deleteAuthenticationAccount(principalId)` | Deletes an account with its credentials, sessions and sign-in identifier; `authentication.account-deleted` (§6.1). |
 | `listAuthenticationCredentialRecoveries({ after?, limit? })` | Recoveries in the order they happened, up to `limit` (default 100, at most 1000), with `next` to pass as `after`; a principal recovered again moves to a later page. For the host's reconciliation with Identity (§4.1). |
+| `exportAuthenticationData({ principalId, correlationId })` | Authentication's part of a data-subject access request (`AuthenticationDataExport`), or `null` without an account: the sign-in identifier and whether it was verified, whether a password is set, linked providers, passkeys (name, when added, whether backed up), whether TOTP is enrolled and how many backup codes remain, the sessions in force (times and a coarse client description) and the latest credential recovery. Never a password hash, secret, code, key, token or IP address, and no profile data, which is Profile's. Server-only: the host calls it through iam-integration's coordination adapter, for Profile, which assembles the archive ([data-subject requests](https://github.com/nuxt4-layers/iam-integration/blob/a3a414350c951bd2fba7acbb893962e4a62ae81d/docs/processes/data-subject-requests.md)). |
 
 Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
 
@@ -318,7 +319,7 @@ Each page has one `<main>` landmark, one `h1`, a document title and the `lang` o
 
 Registered with the `Authentication` prefix (when `presentation` is on), for hosts that build their own pages: `AuthenticationSignInForm`, `AuthenticationSignUpForm`, `AuthenticationForgotPasswordForm`, `AuthenticationResetPasswordForm`, `AuthenticationMfaPanel`, `AuthenticationTotpEnrolment`, `AuthenticationBackupCodes`, `AuthenticationReauthenticate`, `AuthenticationSecuritySettings`, `AuthenticationProviderButtons`, `AuthenticationField` and `AuthenticationAlert`. Their props and events are documented in each component's header. They render no page chrome, so a host may place them in its own layout.
 
-`authenticationClasses` (auto-imported, and exported from `./presentation`) holds the utility classes the components use, all taken from the `SemanticPresentationTheme` vocabulary.
+`authenticationClasses` (auto-imported, and exported from `./presentation`) holds the utility classes the components use, all taken from the `SemanticPresentationTheme` vocabulary. `DELIBERATE_PAIRINGS` is exported from `./presentation` only, not auto-imported, so it never collides with the lists of the same name from Identity and Profile in a host.
 
 ### Styling
 

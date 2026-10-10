@@ -114,6 +114,27 @@ describe.skipIf(!hasDatabase)('identity port (composed playground)', async () =>
     expect(await browser.principal()).not.toBeNull()
   })
 
+  it('exports what it holds for a data-subject request, never a secret, token or address', async () => {
+    const { browser, email } = await verifiedAccount()
+    const principal = (await browser.principal())!
+    const { data } = await new Browser().post('/api/__playground/export', { principalId: principal.principalId })
+    expect(data.export).toMatchObject({
+      principalId: principal.principalId,
+      correlationId: '01a00000-0000-4000-8000-000000000000',
+      signInIdentifiers: [{ kind: 'email', value: email, verified: true }],
+      password: { set: true },
+      providers: [],
+      passkeys: [],
+      totp: { enabled: false, backupCodesRemaining: 0 },
+      credentialRecovery: null,
+    })
+    expect(data.export.sessions.length).toBeGreaterThan(0)
+    for (const session of data.export.sessions) expect(Object.keys(session).sort()).toEqual(['clientDescription', 'createdAt', 'expiresAt', 'lastActiveAt'])
+    const text = JSON.stringify(data.export)
+    expect(text).not.toMatch(/token|password"\s*:\s*"|secret|ipAddress|\$argon|scrypt/i)
+    expect((await new Browser().post('/api/__playground/export', { principalId: '01a00000-0000-7000-8000-00000000dead' })).data).toEqual({ export: null })
+  })
+
   it('confirms again an account whose confirmation was lost', async () => {
     const email = freshEmail()
     const browser = new Browser()

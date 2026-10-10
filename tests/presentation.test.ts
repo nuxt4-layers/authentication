@@ -2,7 +2,8 @@ import { globSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { authenticationClasses, DELIBERATE_PAIRINGS } from '../presentation/utils/authentication-classes'
+import { DELIBERATE_PAIRINGS } from '../presentation/pairings'
+import { authenticationClasses } from '../presentation/utils/authentication-classes'
 
 /**
  * Theme Manager's Semantic Presentation Guide: Fill, Pen and Edge of one
