@@ -20,6 +20,7 @@ describe('Authentication public contract', () => {
       'AUTHENTICATION_EVENT_TYPES',
       'AUTHENTICATION_MESSAGE_KINDS',
       'AUTHENTICATION_RECOVERY_METHODS',
+      'AUTHENTICATION_RETENTION_BOUNDS',
       'AUTHENTICATION_STANDINGS',
       'AuthenticationCompositionError',
       'DEFAULT_AUTHENTICATION_POLICY',

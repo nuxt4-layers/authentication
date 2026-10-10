@@ -8,10 +8,12 @@ import {
   provideAuthenticationClock,
   provideAuthenticationDatabase,
   provideAuthenticationEventSink,
+  provideAuthenticationLegalHolds,
   provideAuthenticationMailer,
   provideAuthenticationPolicy,
   useAuthenticationClock,
   useAuthenticationDatabase,
+  useAuthenticationLegalHolds,
   useAuthenticationMailer,
   useAuthenticationPolicy,
 } from '../server/utils/authentication-composition'
@@ -90,6 +92,14 @@ describe('Authentication composition ports', () => {
     await expect(emitAuthenticationEvent(event)).resolves.toBeUndefined()
     expect(error).toHaveBeenCalledOnce()
     expect(String(error.mock.calls[0])).toContain('authentication.signed-in')
+  })
+
+  it('has no legal-hold port unless the host supplies one, and rejects one without covers()', () => {
+    expect(useAuthenticationLegalHolds()).toBeNull()
+    expect(() => provideAuthenticationLegalHolds({} as never)).toThrow(TypeError)
+    const holds = { covers: async () => false }
+    provideAuthenticationLegalHolds(holds)
+    expect(useAuthenticationLegalHolds()).toBe(holds)
   })
 
   it('uses the system clock when the host supplies none', () => {

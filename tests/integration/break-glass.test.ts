@@ -280,5 +280,21 @@ describe.skipIf(!hasDatabase)('break-glass accounts (composed playground, no ide
       expect(expired.status).toBe(400)
       expect(expired.data).toEqual(unknown.data)
     })
+
+    it('deletes an expired token once its retention period has passed, announcing counts only', async () => {
+      const { identityId } = await provision()
+      const maintain = () => new Browser().post('/api/__playground/maintenance')
+      await moveClock(61 * 60 + 29 * 86_400)
+      await maintain()
+      expect((await query(`select 1 from "authentication"."break_glass_enrolment" where "user_id" = $1`, [identityId])).rows).toHaveLength(1)
+      await moveClock(2 * 86_400)
+      const run = await maintain()
+      expect(run.status).toBe(200)
+      expect(run.data.retention.enrolmentTokens).toBeGreaterThanOrEqual(1)
+      expect((await query(`select 1 from "authentication"."break_glass_enrolment" where "user_id" = $1`, [identityId])).rows).toHaveLength(0)
+      const applied = (await recorder()).events.filter(e => e.type === 'authentication.retention-applied').at(-1)!
+      expect(applied).toMatchObject({ principalId: null, counts: run.data.retention })
+      expect(JSON.stringify(applied)).not.toContain(identityId)
+    })
   })
 })

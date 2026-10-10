@@ -77,3 +77,14 @@ export interface AuthenticationEventSink {
 export interface AuthenticationClock {
   now(): Date
 }
+
+/**
+ * Optional legal-hold port (iam-integration's `legalHoldsFromMembers`, with
+ * the `authentication` part): whether a legal hold covers a person's data
+ * now. Maintenance asks it before deleting a credential-recovery record; it
+ * keeps every such record when the port is absent, rejects or answers
+ * anything but `false`.
+ */
+export interface AuthenticationLegalHolds {
+  covers(subject: { kind: 'person', id: string }): Promise<boolean>
+}

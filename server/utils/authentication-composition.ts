@@ -4,6 +4,7 @@ import type {
   AuthenticationEvent,
   AuthenticationEventSink,
   AuthenticationIdentity,
+  AuthenticationLegalHolds,
   AuthenticationMailer,
   AuthenticationPolicy,
   AuthenticationPolicyInput,
@@ -24,6 +25,7 @@ let eventSink: AuthenticationEventSink | null = null
 let policy: AuthenticationPolicy | null = null
 let identity: AuthenticationIdentity | null = null
 let clock: AuthenticationClock | null = null
+let legalHolds: AuthenticationLegalHolds | null = null
 
 const SYSTEM_CLOCK: AuthenticationClock = Object.freeze({ now: () => new Date() })
 
@@ -88,6 +90,24 @@ export function useAuthenticationClock(): AuthenticationClock {
   return clock ?? SYSTEM_CLOCK
 }
 
+/**
+ * Optional legal-hold port (normally iam-integration's `legalHoldsFromMembers`
+ * with the `authentication` part). Without it, maintenance keeps every
+ * credential-recovery record, and still deletes expired sessions and tokens,
+ * which no hold covers.
+ */
+export function provideAuthenticationLegalHolds(next: AuthenticationLegalHolds): void {
+  if (typeof next?.covers !== 'function') {
+    throw new TypeError('provideAuthenticationLegalHolds expects an object with a covers(subject) function.')
+  }
+  legalHolds = next
+}
+
+/** The legal-hold port, or null when the host supplies none. */
+export function useAuthenticationLegalHolds(): AuthenticationLegalHolds | null {
+  return legalHolds
+}
+
 /** Validates and stores the host's policy overrides. Invalid policy throws at startup. */
 export function provideAuthenticationPolicy(input: AuthenticationPolicyInput): void {
   policy = resolveAuthenticationPolicy(input)
@@ -131,4 +151,5 @@ export function clearAuthenticationComposition(): void {
   policy = null
   identity = null
   clock = null
+  legalHolds = null
 }

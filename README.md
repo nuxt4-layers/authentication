@@ -44,7 +44,7 @@ The layer has three parts with one-way dependencies: the **contract** (plain Typ
 
 The layer also provides these, auto-imported for the host:
 
-- **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `provideAuthenticationIdentity`, `provideAuthenticationClock`, `migrateAuthenticationDatabase`.
+- **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `provideAuthenticationIdentity`, `provideAuthenticationClock`, `provideAuthenticationLegalHolds`, `migrateAuthenticationDatabase`, `runAuthenticationMaintenance`.
 - **Break-glass accounts (ADR-0007), server-only operator functions:** `provisionAuthenticationBreakGlass({ identityId, address, correlationId })` and `rotateAuthenticationBreakGlass({ identityId, correlationId })`, each returning a one-time passkey enrolment token. Never exposed over HTTP; see [docs/contracts.md](docs/contracts.md) §12.
 - **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`. The latter requires aal2 by default while MFA is required.
 - **Client:** the `useAuthentication()` and `useAuthenticationPublicPolicy()` composables, and the `authenticated`, `guest` and `authentication-signed-in` route middleware.
@@ -90,6 +90,7 @@ export default defineNitroPlugin(() => {
   provideAuthenticationEventSink({ emit: event => audit.record(event) })  // optional
   provideAuthenticationPolicy({ password: { minLength: 16 } })            // optional
   provideAuthenticationClock(suiteClock)                                   // optional: the suite's one clock; the system clock without it
+  provideAuthenticationLegalHolds(holds)                                   // optional: iam-integration's legalHoldsFromMembers({ part: 'authentication', ... })
 })
 ```
 
