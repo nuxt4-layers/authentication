@@ -24,7 +24,7 @@ Authentication ─────────────────────�
       ▼                                                                      │
     Audit / Logging                       domain capabilities ── requests ───┘
 
-Composition root supplies: database pool, mailer, event sink, policy.
+Composition root supplies: database pool, mailer, event sink, policy, clock.
 ```
 
 Authentication has **no package dependency** on UI, Theme Manager, Identity, Authorization, Audit, any database vendor SDK, or any mail provider.
@@ -38,7 +38,7 @@ The host application:
 - selects a compatible version and pins it;
 - supplies a PostgreSQL pool through `provideAuthenticationDatabase` (required);
 - supplies a mailer through `provideAuthenticationMailer` (required);
-- optionally supplies an event sink and policy overrides;
+- optionally supplies an event sink, policy overrides and the suite's clock (`provideAuthenticationClock`, the same clock it gives every IAM member, or none); a clock that can be moved is composed only in a test mode, never in production;
 - supplies `NUXT_AUTHENTICATION_SECRET` and `NUXT_AUTHENTICATION_BASE_URL` through secret management;
 - applies the layer's database migrations by calling `migrateAuthenticationDatabase()` once after supplying the database (authentication requests wait for it);
 - serves the application from a registrable domain (not an IP address) so passkeys work; the passkey relying-party ID is the base URL's host;
@@ -47,6 +47,7 @@ The host application:
 - when using the default pages with Theme Manager, adds `@import "@nuxt4-layers/authentication/tailwind.css";` after Theme Manager's `presentation.css` in its Tailwind entry, and composes a theme whose pairings meet the contrast requirements in `docs/contracts.md` (Styling), customising it through Theme Manager rather than by overriding its private `--ui-*` variables;
 - overrides or translates page text through `app.config.ts` (`authentication.messages`);
 - sets `NUXT_AUTHENTICATION_TRUST_PROXY=true` only when a reverse proxy overwrites `X-Forwarded-For`, so per-client throttling sees real client addresses;
+- for break-glass accounts (ADR-0007), runs `provisionAuthenticationBreakGlass` from its operator procedure after Identity's `provisionIdentityBreakGlass`, and `rotateAuthenticationBreakGlass` on Identity's `break-glass.used`; hands each returned enrolment token to the operator as `<base URL><routes.breakGlassEnrol>#<token>` over a channel it trusts, never logging it; and never exposes either function over HTTP;
 - integration-tests the composed system, including negative tests.
 
 ## 5. Layer responsibilities
@@ -96,6 +97,7 @@ On Supabase, also make sure `authentication` is not listed under **Project Setti
 | Invalid port shape or schema name | `TypeError` from the `provide*` call at startup |
 | Invalid policy | Validation error from `provideAuthenticationPolicy` at startup |
 | Event sink failure | Reported via `console.error`. The operation outcome is unchanged. |
+| Clock throws or answers anything but a valid `Date` | `unavailable` (503) for the operation that needed the time. The layer never falls back to the system clock. |
 | Engine or database failure | `unavailable` (503). Internal details are not disclosed. |
 | Missing or short `NUXT_AUTHENTICATION_SECRET`, missing base URL, or non-https base URL in production (loopback excepted) | Error at the first authentication request; nothing is served insecurely |
 | Mailer failure | Logged. The HTTP response is unchanged, so it cannot reveal whether an account exists. |

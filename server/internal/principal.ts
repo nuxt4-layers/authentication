@@ -38,7 +38,10 @@ export function assuranceLevel(methods: readonly AuthenticationMethod[]): Authen
 
 const toDate = (value: Date | string) => (value instanceof Date ? value : new Date(value))
 
-/** Absolute expiry: the earlier of the sliding expiry and createdAt + absolute lifetime. */
+/**
+ * Absolute expiry: the earlier of the sliding expiry and createdAt + absolute
+ * lifetime. Session lifetime is the engine's, judged on the system clock.
+ */
 export function absoluteExpiry(session: EngineSessionRecord, absoluteLifetimeSeconds: number): Date {
   const absolute = new Date(toDate(session.createdAt).getTime() + absoluteLifetimeSeconds * 1000)
   const sliding = toDate(session.expiresAt)
@@ -61,11 +64,14 @@ export function toPrincipal(session: EngineSessionRecord, absoluteLifetimeSecond
   }
 }
 
-/** Returns the failing contract code, or null when the principal satisfies the requirement. */
+/**
+ * Returns the failing contract code, or null when the principal satisfies the
+ * requirement. `now` is the layer's clock time, which judges freshness.
+ */
 export function evaluateRequirement(
   principal: AuthenticatedPrincipal,
-  requirement: AuthenticationRequirement = {},
-  now: Date = new Date(),
+  requirement: AuthenticationRequirement,
+  now: Date,
 ): AuthenticationErrorCode | null {
   if (principal.standing !== 'allowed' && !(requirement.allowStandings ?? []).includes(principal.standing)) return 'account-restricted'
   if (requirement.minimumLevel === 'aal2' && principal.assurance.level !== 'aal2') return 'insufficient-assurance'

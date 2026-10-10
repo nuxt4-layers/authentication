@@ -1,4 +1,5 @@
 import type {
+  AuthenticationClock,
   AuthenticationDatabase,
   AuthenticationEvent,
   AuthenticationEventSink,
@@ -22,6 +23,9 @@ let mailer: AuthenticationMailer | null = null
 let eventSink: AuthenticationEventSink | null = null
 let policy: AuthenticationPolicy | null = null
 let identity: AuthenticationIdentity | null = null
+let clock: AuthenticationClock | null = null
+
+const SYSTEM_CLOCK: AuthenticationClock = Object.freeze({ now: () => new Date() })
 
 export function provideAuthenticationDatabase(next: AuthenticationDatabase): void {
   if (next?.dialect !== 'postgres' || typeof next.pool?.query !== 'function') {
@@ -63,6 +67,25 @@ export function provideAuthenticationIdentity(next: AuthenticationIdentity): voi
 /** The identity port, or null when the host supplies none. */
 export function useAuthenticationIdentity(): AuthenticationIdentity | null {
   return identity
+}
+
+/**
+ * Optional clock port: the suite's one clock (iam-integration's architecture,
+ * "Time"). Every time the layer keeps or judges comes from it; the engine's
+ * own times (session lifetime, rate limits, TOTP steps, email-link expiry)
+ * stay on the system clock. Trusted like a key: compose it from server code
+ * only, and never a movable clock outside tests.
+ */
+export function provideAuthenticationClock(next: AuthenticationClock): void {
+  if (typeof next?.now !== 'function') {
+    throw new TypeError('provideAuthenticationClock expects an object with a now() function.')
+  }
+  clock = next
+}
+
+/** The host's clock, or the system clock when the host supplies none. */
+export function useAuthenticationClock(): AuthenticationClock {
+  return clock ?? SYSTEM_CLOCK
 }
 
 /** Validates and stores the host's policy overrides. Invalid policy throws at startup. */
@@ -107,4 +130,5 @@ export function clearAuthenticationComposition(): void {
   eventSink = null
   policy = null
   identity = null
+  clock = null
 }

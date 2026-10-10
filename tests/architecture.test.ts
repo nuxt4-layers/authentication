@@ -129,8 +129,8 @@ describe('architecture: presentation can be switched off', () => {
     const { nuxt, pages } = await runModule()
     expect(kit.addComponentsDir).toHaveBeenCalledOnce()
     expect(kit.addImportsDir).toHaveBeenCalledOnce()
-    expect(pages).toHaveLength(6)
-    expect(Object.keys(nuxt.options.routeRules)).toHaveLength(6)
+    expect(pages).toHaveLength(7)
+    expect(Object.keys(nuxt.options.routeRules)).toHaveLength(7)
   })
 
   it('keeps components and auto-imports but no pages when the pages are disabled', async () => {

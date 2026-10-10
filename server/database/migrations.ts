@@ -54,6 +54,17 @@ create table {{schema}}."credential_recovery" ("user_id" text not null primary k
 create index "credential_recovery_recovered_at_idx" on {{schema}}."credential_recovery" ("recovered_at", "user_id");
 `,
   },
+  {
+    // Break-glass accounts (ADR-0007): the layer itself knows which accounts
+    // are passkey-only, with or without an identity port. Each has at most one
+    // outstanding enrolment token, stored only as a keyed digest, with the
+    // WebAuthn challenge of the ceremony in progress bound to it.
+    id: '0005_break_glass',
+    sql: `
+create table {{schema}}."break_glass_account" ("user_id" text not null primary key references {{schema}}."user" ("id") on delete cascade, "provisioned_at" timestamptz not null);
+create table {{schema}}."break_glass_enrolment" ("user_id" text not null primary key references {{schema}}."break_glass_account" ("user_id") on delete cascade, "token_digest" text not null unique check ("token_digest" ~ '^[0-9a-f]{64}$'), "expires_at" timestamptz not null, "challenge" text);
+`,
+  },
 ]
 
 const SCHEMA_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/

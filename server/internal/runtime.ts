@@ -8,7 +8,9 @@ import type {
   AuthenticationPolicy,
 } from '../../contracts'
 import { quoteSchema } from '../database/migrations'
+import { currentTime } from './clock'
 import { createHibpCheck, noCompromisedPasswordCheck, type CompromisedPasswordCheck } from './compromised-password'
+import { breakGlassProvisioning, createBreakGlassAccounts, type BreakGlassAccounts } from './break-glass'
 import { buildEngineOptions } from './engine-options'
 import type { EnabledProvider } from './federation-config'
 import { createCredentialRecoveries, type CredentialRecoveries } from './recovery'
@@ -56,6 +58,8 @@ export interface AuthenticationRuntime {
   recoveries: CredentialRecoveries
   /** Account standing from the identity port; `allowed` without one. */
   standing: Standing
+  /** Break-glass accounts and their enrolment tokens (ADR-0007). */
+  breakGlass: BreakGlassAccounts
   policy: AuthenticationPolicy
   isCompromisedPassword: CompromisedPasswordCheck
   baseUrl: string
@@ -92,7 +96,7 @@ export function validateRuntimeConfig(input: Pick<AuthenticationRuntimeInput, 's
 export function systemEvent(type: AuthenticationEvent['type'], principalId: string | null, extra: Partial<AuthenticationEvent> = {}): AuthenticationEvent {
   return {
     type,
-    occurredAt: new Date().toISOString(),
+    occurredAt: currentTime().toISOString(),
     principalId,
     sessionId: null,
     method: null,
@@ -127,6 +131,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     return result.rows[0]?.emailVerified === true
   }
   const standing = createStanding({ identity: input.identity ?? (() => null), isVerified: verified })
+  const breakGlass = createBreakGlassAccounts(database.pool, database.schema, input.secret)
 
   const engine = createEngine(buildEngineOptions({
     pool: database.pool,
@@ -138,6 +143,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     policy,
     hooks: {
       async sendVerificationEmail({ email, token }) {
+        // Email-link expiries are the engine's own, on the system clock.
         await send({
           kind: 'email-verification',
           to: email,
@@ -147,6 +153,9 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
         })
       },
       async sendPasswordReset({ userId, email, token }) {
+        // A break-glass account has no password to reset: nothing is sent,
+        // and the response stays the same as for any other address.
+        if (await breakGlass.is(userId)) return
         await send({
           kind: 'password-reset',
           to: email,
@@ -157,6 +166,9 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
         await emit(systemEvent('authentication.password-reset-requested', userId))
       },
       async onPasswordReset({ userId, email }) {
+        // Second line of defence: the engine could not store a password (the
+        // account hook refused it), and the reset fails rather than counting.
+        if (await breakGlass.is(userId)) throw new Error('a break-glass account has no password')
         await throttle.clear(accountKey(email))
         // Recorded before anything is announced; a failure fails the reset, so no recovery goes unrecorded.
         await recoveries.record(userId, 'password-reset')
@@ -165,12 +177,22 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
         await notify(email, 'authentication.password-reset-completed')
       },
       async reserveIdentity() {
+        // A break-glass account takes the identifier Identity already issued.
+        const provisioning = breakGlassProvisioning.getStore()
+        if (provisioning) return provisioning.identityId
         return standing.reserve(signUpInvitation.getStore()?.invitationToken ?? null)
       },
       async confirmIdentity({ userId }) {
+        // Identity creates break-glass identities active: there is nothing to confirm.
+        if (breakGlassProvisioning.getStore()) return
         await standing.confirm(userId)
       },
+      async isBreakGlass(userId) {
+        return breakGlass.is(userId)
+      },
       async onAccountRegistered({ userId }) {
+        // A break-glass account is announced as `authentication.break-glass-provisioned`.
+        if (breakGlassProvisioning.getStore()) return
         await emit(systemEvent('authentication.account-registered', userId))
       },
       async onEmailVerified({ userId }) {
@@ -197,6 +219,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     throttle,
     recoveries,
     standing,
+    breakGlass,
     policy,
     isCompromisedPassword: policy.password.compromisedCheck === 'hibp-range'
       ? createHibpCheck(input.fetch)

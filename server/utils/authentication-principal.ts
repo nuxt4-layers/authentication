@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import type { AuthenticatedPrincipal, AuthenticationAssuranceLevel, AuthenticationRequirement } from '../../contracts'
+import { currentTime } from '../internal/clock'
 import { authenticationError } from '../internal/http'
 import { resolvePrincipal, startMigrations } from '../internal/nitro'
 import { evaluateRequirement } from '../internal/principal'
@@ -33,7 +34,8 @@ export async function requireAuthenticatedPrincipal(
 ): Promise<AuthenticatedPrincipal> {
   const principal = await resolvePrincipal(event)
   if (!principal) throw authenticationError('unauthenticated')
-  const failure = evaluateRequirement(principal, { minimumLevel: requiredAssuranceLevel(), ...requirement })
+  // Whether the authentication is recent is judged by the layer's clock.
+  const failure = evaluateRequirement(principal, { minimumLevel: requiredAssuranceLevel(), ...requirement }, currentTime())
   if (failure) throw authenticationError(failure)
   return principal
 }

@@ -27,6 +27,9 @@ export const AUTHENTICATION_EVENT_TYPES = [
   'authentication.session-revoked',
   'authentication.federated-identity-linked',
   'authentication.federated-identity-unlinked',
+  'authentication.break-glass-provisioned',
+  'authentication.break-glass-enrolled',
+  'authentication.break-glass-rotated',
 ] as const
 
 export type AuthenticationEventType = typeof AUTHENTICATION_EVENT_TYPES[number]

@@ -1,4 +1,5 @@
 import type { AuthenticationDataExport } from '../../shared/export'
+import { currentTime } from '../internal/clock'
 import { useAuthenticationRuntime } from '../internal/nitro'
 import { absoluteExpiry } from '../internal/principal'
 import { toSessionSummary } from '../internal/sessions'
@@ -31,7 +32,7 @@ export async function exportAuthenticationData(input: { principalId: string, cor
   const totpEnabled = Boolean(totp && totp.verified !== false)
   return {
     principalId,
-    exportedAt: new Date().toISOString(),
+    exportedAt: currentTime().toISOString(),
     correlationId,
     signInIdentifiers: [{ kind: 'email', value: user.email, verified: user.emailVerified, createdAt: iso(user.createdAt) }],
     password: { set: accounts.some(account => account.providerId === 'credential') },

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AuthenticatedPrincipal } from '../contracts'
 import { resolveAuthenticationPolicy } from '../contracts'
 import { createHibpCheck } from '../server/internal/compromised-password'
+import { enrolmentTokenDigest, ENROLMENT_TOKEN_PATTERN, newEnrolmentToken } from '../server/internal/break-glass'
 import { buildEngineOptions } from '../server/internal/engine-options'
 import { describeClient, engineErrorCode, safeRedirectPath } from '../server/internal/http'
 import { absoluteExpiry, assuranceLevel, evaluateRequirement, parseMethods, toPrincipal } from '../server/internal/principal'
@@ -354,5 +355,25 @@ describe('federation internals', async () => {
     expect(assuranceLevel(['federated'])).toBe('aal1')
     expect(assuranceLevel(['federated', 'totp'])).toBe('aal2')
     expect(assuranceLevel(['federated', 'remembered-device'])).toBe('aal2')
+  })
+})
+
+describe('break-glass enrolment tokens', () => {
+  it('are 32 random bytes in base64url', () => {
+    const tokens = new Set(Array.from({ length: 50 }, () => newEnrolmentToken()))
+    expect(tokens.size).toBe(50)
+    for (const token of tokens) {
+      expect(token).toMatch(ENROLMENT_TOKEN_PATTERN)
+      expect(Buffer.from(token, 'base64url')).toHaveLength(32)
+    }
+  })
+
+  it('are digested with a key derived from the layer\'s secret, distinct from backup codes\'', () => {
+    const token = newEnrolmentToken()
+    const digest = enrolmentTokenDigest('x'.repeat(40), token)
+    expect(digest).toMatch(/^[0-9a-f]{64}$/)
+    expect(enrolmentTokenDigest('x'.repeat(40), token)).toBe(digest)
+    expect(enrolmentTokenDigest('y'.repeat(40), token)).not.toBe(digest)
+    expect(digest).not.toBe(createHash('sha256').update(token).digest('hex'))
   })
 })

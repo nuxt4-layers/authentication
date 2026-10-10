@@ -1,5 +1,5 @@
 import { defineEventHandler } from 'h3'
-import { requireAccess } from '../../../internal/guards'
+import { refuseBreakGlass, requireAccess } from '../../../internal/guards'
 import { authenticationError, clientInfo, requestHeaders, translateEngineError } from '../../../internal/http'
 import { passkeyRegistrationBody, readBodyAs } from '../../../internal/input'
 import { registrationUserVerified } from '../../../internal/mfa'
@@ -12,6 +12,7 @@ import { systemEvent } from '../../../internal/runtime'
  */
 export default defineEventHandler(async (event) => {
   const principal = await requireAccess(event, 'enrolment')
+  await refuseBreakGlass(principal)
   const { response, name } = await readBodyAs(event, passkeyRegistrationBody)
   if (!registrationUserVerified(response)) throw authenticationError('insufficient-assurance')
   const runtime = await useAuthenticationRuntime()

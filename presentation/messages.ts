@@ -116,6 +116,14 @@ export const AUTHENTICATION_MESSAGES_EN_GB = {
   'authentication.security.reauthPasskey': 'Confirm with a passkey',
   'authentication.security.saved': 'Saved.',
 
+  // Break-glass passkey enrolment (an operator, on the offline device)
+  'authentication.breakGlass.title': 'Register the emergency passkey',
+  'authentication.breakGlass.intro': 'This registers the passkey of an emergency (break-glass) account on this device. Use the offline device set aside for it. The link works once.',
+  'authentication.breakGlass.register': 'Register passkey',
+  'authentication.breakGlass.done': 'The passkey is registered.',
+  'authentication.breakGlass.storeOffline': 'Disconnect this device and store it offline, somewhere safe, until the account is needed. You can close this page.',
+  'authentication.breakGlass.missingToken': 'This page needs the complete enrolment link you were given.',
+
   // Errors (contract codes)
   'authentication.error.invalid-credentials': 'The email address or password is not right.',
   'authentication.error.account-restricted': 'Your account cannot do this at the moment.',

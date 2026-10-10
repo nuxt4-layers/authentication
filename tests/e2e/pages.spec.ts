@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 import pg from 'pg'
 import { totpCode, msLeftInStep } from '../support/totp'
 import { IDP_CONTROL_PORT, ORIGIN, PASSWORD } from './constants'
@@ -118,7 +119,7 @@ async function enrolTotpThroughPage(page: Page): Promise<string> {
 
 test.describe('default pages', () => {
   test('every public page meets the automated WCAG 2.2 AA rules', async ({ page }) => {
-    for (const path of ['/sign-in', '/sign-up', '/forgot-password', '/reset-password?token=example']) {
+    for (const path of ['/sign-in', '/sign-up', '/forgot-password', '/reset-password?token=example', '/break-glass/enrol', `/break-glass/enrol#${'A'.repeat(43)}`]) {
       await page.goto(path)
       await expect(page.locator('h1')).toBeVisible()
       await expectAccessible(page)
@@ -141,11 +142,19 @@ test.describe('default pages', () => {
       await expectAccessible(page)
       await page.getByRole('link', { name: 'Forgotten your password?' }).hover()
       await expectAccessible(page)
+      // The break-glass enrolment page has no fields: its button and notices.
+      await page.goto(`/break-glass/enrol#${'A'.repeat(43)}`)
+      await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), mode === 'dark')
+      await page.getByRole('button', { name: 'Register passkey' }).hover()
+      await expectAccessible(page)
+      await page.getByRole('button', { name: 'Register passkey' }).click()
+      await expect(page.getByRole('alert')).toContainText('That link is invalid or has expired')
+      await expectAccessible(page)
     }
   })
 
   test('pages refuse framing, caching and referrer leakage', async ({ request }) => {
-    for (const path of ['/sign-in', '/sign-up', '/forgot-password', '/reset-password?token=example', '/mfa', '/account/security']) {
+    for (const path of ['/sign-in', '/sign-up', '/forgot-password', '/reset-password?token=example', '/mfa', '/account/security', '/break-glass/enrol']) {
       const response = await request.get(path, { maxRedirects: 0 })
       const headers = response.headers()
       expect(headers['content-security-policy'], path).toContain("frame-ancestors 'none'")
@@ -157,7 +166,7 @@ test.describe('default pages', () => {
 
   test('pages reflow at 320 CSS pixels without horizontal scrolling', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 })
-    for (const path of ['/sign-in', '/sign-up', '/forgot-password']) {
+    for (const path of ['/sign-in', '/sign-up', '/forgot-password', `/break-glass/enrol#${'A'.repeat(43)}`]) {
       await page.goto(path)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       expect(overflow, path).toBeLessThanOrEqual(0)
@@ -323,6 +332,67 @@ test.describe('default pages', () => {
     await second.goto('/sign-in?redirect=/protected')
     await second.getByRole('button', { name: 'Sign in with a passkey' }).click()
     await expect(second).toHaveURL(/\/protected$/)
+    await fresh.close()
+  })
+
+  test('break-glass: enrol the passkey from the one-time link, then sign in with it alone', async ({ page, browser }) => {
+    const client = await page.context().newCDPSession(page)
+    await client.send('WebAuthn.enable')
+    const { authenticatorId } = await client.send('WebAuthn.addVirtualAuthenticator', {
+      options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true },
+    })
+
+    const identityId = randomUUID()
+    const provisioned = await page.request.post('/api/__playground/break-glass', { data: { action: 'provision', identityId, address: freshEmail() } })
+    expect(provisioned.ok()).toBe(true)
+    const { enrolmentToken } = await provisioned.json() as { enrolmentToken: string }
+
+    // The token travels in the fragment, which the browser never sends to the server.
+    const requested: string[] = []
+    page.on('request', request => requested.push(request.url()))
+    await page.goto(`/break-glass/enrol#${enrolmentToken}`)
+    await expect(page.getByRole('heading', { level: 1, name: 'Register the emergency passkey' })).toBeVisible()
+    // One action, and nowhere else to go.
+    await expect(page.getByRole('link')).toHaveCount(0)
+    await expect(page.getByRole('textbox')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Register passkey' }).click()
+    await expect(page.getByRole('status')).toContainText('The passkey is registered.')
+    await expect(page.getByRole('status')).toContainText('store it offline')
+    await expect(page.getByRole('button')).toHaveCount(0)
+    await expect(page.getByRole('link')).toHaveCount(0)
+    expect(page.url()).toBe(`${ORIGIN}/break-glass/enrol`)
+    expect(requested.some((url) => { const { pathname, search } = new URL(url); return `${pathname}${search}`.includes(enrolmentToken) })).toBe(false)
+    for (const mode of ['light', 'dark'] as const) {
+      await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), mode === 'dark')
+      await expectAccessible(page)
+    }
+    // Enrolment signs nobody in.
+    const anonymous = await page.evaluate(() => fetch('/api/authentication/session').then(response => response.json())) as { principal: unknown }
+    expect(anonymous.principal).toBeNull()
+
+    // The used link now answers as an unknown one would.
+    await page.goto(`/break-glass/enrol#${enrolmentToken}`)
+    await page.getByRole('button', { name: 'Register passkey' }).click()
+    await expect(page.getByRole('alert')).toContainText('That link is invalid or has expired')
+
+    // Sign in with the passkey alone, on a fresh browser holding the same credential.
+    const { credentials } = await client.send('WebAuthn.getCredentials', { authenticatorId })
+    expect(credentials).toHaveLength(1)
+    const fresh = await browser.newContext()
+    const second = await fresh.newPage()
+    const secondClient = await fresh.newCDPSession(second)
+    await secondClient.send('WebAuthn.enable')
+    const { authenticatorId: secondId } = await secondClient.send('WebAuthn.addVirtualAuthenticator', {
+      options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true },
+    })
+    await secondClient.send('WebAuthn.addCredential', { authenticatorId: secondId, credential: credentials[0]! })
+    await second.goto('/sign-in?redirect=/protected')
+    await second.getByRole('button', { name: 'Sign in with a passkey' }).click()
+    await expect(second).toHaveURL(/\/protected$/)
+    await expect(second.getByTestId('principal')).toHaveText(identityId)
+    const session = await second.evaluate(() => fetch('/api/authentication/session').then(response => response.json())) as { principal: { principalId: string, assurance: unknown } }
+    expect(session.principal.principalId).toBe(identityId)
+    expect(session.principal.assurance).toEqual({ level: 'aal2', methods: ['passkey'], phishingResistant: true })
     await fresh.close()
   })
 

@@ -369,4 +369,56 @@ describe.skipIf(!hasDatabase)('authentication HTTP API (composed playground)', a
       expect(serialized).not.toMatch(/token/i)
     })
   })
+
+  // Last: the clock only moves forward, so it runs after every other test.
+  describe('clock port', () => {
+    const moveClock = (body: { advanceSeconds?: number, failing?: boolean }) => new Browser().post('/api/__playground/clock', body)
+    const clockNow = async () => Date.now() + (await moveClock({})).data.offsetMs as number
+
+    it('records authentication and event times from the host\'s clock', async () => {
+      await moveClock({ advanceSeconds: 10 * 86_400 })
+      const { browser } = await verifiedAccount()
+      const now = await clockNow()
+      const principal = (await browser.principal())!
+      const authenticatedAt = Date.parse(principal.authenticatedAt)
+      // Ten days ahead of the system clock, as the host's clock says.
+      expect(authenticatedAt).toBeGreaterThan(Date.now() + 9 * 86_400_000)
+      expect(Math.abs(authenticatedAt - now)).toBeLessThan(10_000)
+      const signedIn = (await recorder()).events.filter(e => e.type === 'authentication.signed-in' && e.principalId === principal.principalId).at(-1)!
+      expect(Math.abs(Date.parse(signedIn.occurredAt) - now)).toBeLessThan(10_000)
+      // Session lifetime is the engine's own, on the system clock: the session is still in force.
+      expect(Date.parse(principal.expiresAt)).toBeLessThan(Date.now() + 2 * 86_400_000)
+    })
+
+    it('judges whether an authentication is recent by the clock, and a re-authentication at the moved time is recent again', async () => {
+      const { browser } = await verifiedAccount()
+      const before = Date.parse((await browser.principal())!.authenticatedAt)
+      await moveClock({ advanceSeconds: 901 })
+      const stale = await browser.post('/api/authentication/password/change', { currentPassword: PASSWORD, newPassword: 'a brand new long passphrase' })
+      expect(stale.status).toBe(401)
+      expect(stale.data.data.code).toBe('reauthentication-required')
+
+      expect((await browser.post('/api/authentication/reauthenticate', { method: 'password', password: PASSWORD })).status).toBe(200)
+      expect(Date.parse((await browser.principal())!.authenticatedAt)).toBeGreaterThanOrEqual(before + 901_000)
+      const fresh = await browser.post('/api/authentication/password/change', { currentPassword: PASSWORD, newPassword: 'a brand new long passphrase' })
+      expect(fresh.status).toBe(200)
+    })
+
+    it('fails closed as unavailable when the clock fails, and never falls back to the system clock', async () => {
+      const { email, browser } = await verifiedAccount()
+      await moveClock({ failing: true })
+      try {
+        const signIn = await new Browser().post('/api/authentication/sign-in', { email, password: PASSWORD })
+        expect(signIn.status).toBe(503)
+        expect(signIn.data.data.code).toBe('unavailable')
+        const sessions = await browser.request('/api/authentication/sessions')
+        expect(sessions.status).toBe(503)
+        expect(sessions.data.data.code).toBe('unavailable')
+      }
+      finally {
+        await moveClock({ failing: false })
+      }
+      expect((await browser.request('/api/authentication/sessions')).status).toBe(200)
+    })
+  })
 })

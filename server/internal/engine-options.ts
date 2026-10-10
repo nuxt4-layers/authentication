@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from 'better-auth'
 import { genericOAuth, twoFactor } from 'better-auth/plugins'
 import { PostgresDialect } from 'kysely'
 import type { AuthenticationPolicy, PostgresPoolLike } from '../../contracts'
+import { currentTime } from './clock'
 import { federationCallbackUrl, type EnabledProvider } from './federation-config'
 
 /**
@@ -22,6 +23,8 @@ export interface EngineHooks {
   reserveIdentity(): Promise<string | null>
   /** The account's sign-in identifier is verified. */
   confirmIdentity(input: { userId: string }): Promise<void>
+  /** Whether the account is a break-glass account, which holds nothing but passkeys. */
+  isBreakGlass(userId: string): Promise<boolean>
 }
 
 export interface EngineConfig {
@@ -135,7 +138,8 @@ export function buildEngineOptions(config: EngineConfig) {
     },
     session: {
       // Sliding expiry implements the idle timeout; the absolute lifetime is
-      // enforced by the principal resolver from `createdAt`.
+      // enforced by the principal resolver from `createdAt`. Both are the
+      // engine's own times, on the system clock.
       expiresIn: policy.session.idleTimeoutSeconds,
       updateAge: Math.max(60, Math.floor(policy.session.idleTimeoutSeconds / 4)),
       // Freshness is enforced by the layer from `authenticatedAt`, which step-up
@@ -240,7 +244,12 @@ export function buildEngineOptions(config: EngineConfig) {
         // Data minimisation: the layer needs only the provider's identity, never
         // its tokens. The engine would otherwise keep ID tokens in plain text.
         create: {
-          before: async account => ({ data: withoutProviderTokens(account) }),
+          // A break-glass account holds passkeys only: never a password (a reset
+          // would otherwise create one) or a provider link.
+          before: async (account) => {
+            if (account.userId && await config.hooks?.isBreakGlass(account.userId)) return false
+            return { data: withoutProviderTokens(account) }
+          },
           after: async (account) => {
             if (account.providerId !== 'credential') {
               await config.hooks?.onIdentityLinked({ userId: account.userId, providerId: account.providerId })
@@ -260,7 +269,7 @@ export function buildEngineOptions(config: EngineConfig) {
             return {
               data: {
                 ...session,
-                authenticatedAt: record.authenticatedAt ?? new Date(),
+                authenticatedAt: record.authenticatedAt ?? currentTime(),
                 authenticationMethods: record.authenticationMethods ?? '',
               },
             }

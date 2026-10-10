@@ -25,10 +25,14 @@ export async function completeSignIn(event: H3Event, runtime: AuthenticationRunt
   client: AuthenticationEventClient
 }): Promise<void> {
   // The account's standing decides whether the new session may exist at all;
-  // a refusal reads like a wrong password, so it reveals nothing.
+  // a refusal reads like a wrong password, so it reveals nothing. A
+  // break-glass account is passkey-only by the layer's own record, whether or
+  // not an identity port is supplied.
   let refusal: string | null
   try {
-    refusal = signInRefusal(await runtime.standing.of(input.userId), input.methods)
+    const standing = await runtime.standing.of(input.userId)
+    const breakGlass = await runtime.breakGlass.is(input.userId)
+    refusal = signInRefusal(breakGlass ? { ...standing, passkeyOnly: true } : standing, input.methods)
   }
   catch (error) {
     if (!(error instanceof IdentityPortFailure)) throw error

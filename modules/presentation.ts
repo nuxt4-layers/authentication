@@ -18,6 +18,7 @@ export interface AuthenticationPagePaths {
   resetPassword: string
   mfa: string
   security: string
+  breakGlassEnrol: string
 }
 
 export interface AuthenticationModuleOptions {
@@ -36,6 +37,7 @@ const PAGES: { key: keyof AuthenticationPagePaths, file: string }[] = [
   { key: 'resetPassword', file: 'ResetPasswordPage.vue' },
   { key: 'mfa', file: 'MfaPage.vue' },
   { key: 'security', file: 'SecurityPage.vue' },
+  { key: 'breakGlassEnrol', file: 'BreakGlassEnrolPage.vue' },
 ]
 
 export default defineNuxtModule<AuthenticationModuleOptions>({
@@ -51,6 +53,7 @@ export default defineNuxtModule<AuthenticationModuleOptions>({
         resetPassword: '/reset-password',
         mfa: '/mfa',
         security: '/account/security',
+        breakGlassEnrol: '/break-glass/enrol',
       },
     },
   },

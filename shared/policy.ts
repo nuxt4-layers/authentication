@@ -56,6 +56,15 @@ const policySchema = z.object({
 
   /** Whether an email address must be verified before the first sign-in. */
   emailVerification: z.enum(['required', 'optional']),
+
+  breakGlass: z.object({
+    /**
+     * Minutes a break-glass enrolment token stays valid. A longer period gives
+     * a leaked token longer to be used; lengthening the default is a
+     * documented risk.
+     */
+    enrolmentTokenMinutes: z.int().min(5).max(1_440),
+  }).strict(),
 }).strict().refine(
   policy => policy.session.idleTimeoutSeconds <= policy.session.absoluteLifetimeSeconds,
   { message: 'session.idleTimeoutSeconds must not exceed session.absoluteLifetimeSeconds', path: ['session'] },
@@ -78,6 +87,7 @@ export const DEFAULT_AUTHENTICATION_POLICY: Readonly<AuthenticationPolicy> = Obj
   mfa: 'required' as const,
   rememberedDevice: Object.freeze({ days: 0 }),
   emailVerification: 'required' as const,
+  breakGlass: Object.freeze({ enrolmentTokenMinutes: 60 }),
 })
 
 /**
@@ -94,6 +104,7 @@ export function resolveAuthenticationPolicy(input: AuthenticationPolicyInput = {
     mfa: input.mfa ?? defaults.mfa,
     rememberedDevice: { ...defaults.rememberedDevice, ...input.rememberedDevice },
     emailVerification: input.emailVerification ?? defaults.emailVerification,
+    breakGlass: { ...defaults.breakGlass, ...input.breakGlass },
   })
 }
 

@@ -12,6 +12,7 @@ describe('Authentication policy', () => {
     expect(policy.emailVerification).toBe('required')
     expect(policy.rememberedDevice.days).toBe(0)
     expect(policy.session).toEqual({ idleTimeoutSeconds: 3_600, absoluteLifetimeSeconds: 86_400 })
+    expect(policy.breakGlass).toEqual({ enrolmentTokenMinutes: 60 })
   })
 
   it('freezes the defaults so they cannot be weakened by mutation', () => {
@@ -35,6 +36,8 @@ describe('Authentication policy', () => {
     ['re-authentication window over an hour', { reauthentication: { maxAgeSeconds: 7_200 } }],
     ['idle timeout longer than absolute lifetime', { session: { idleTimeoutSeconds: 90_000 } }],
     ['remembered devices beyond 30 days', { rememberedDevice: { days: 31 } }],
+    ['break-glass enrolment tokens shorter than 5 minutes', { breakGlass: { enrolmentTokenMinutes: 4 } }],
+    ['break-glass enrolment tokens longer than a day', { breakGlass: { enrolmentTokenMinutes: 1_441 } }],
   ])('rejects %s', (_label, input) => {
     expect(() => resolveAuthenticationPolicy(input as never)).toThrow()
   })

@@ -1,5 +1,5 @@
 import { defineEventHandler } from 'h3'
-import { requireAccess } from '../../../internal/guards'
+import { refuseBreakGlass, requireAccess } from '../../../internal/guards'
 import { clientInfo, requestHeaders, translateEngineError } from '../../../internal/http'
 import { passwordOnlyBody, readBodyAs } from '../../../internal/input'
 import { trustProxy, useAuthenticationRuntime } from '../../../internal/nitro'
@@ -8,6 +8,7 @@ import { systemEvent } from '../../../internal/runtime'
 /** Replaces every backup code. The new codes are shown once; the old ones stop working. */
 export default defineEventHandler(async (event) => {
   const principal = await requireAccess(event, 'sensitive')
+  await refuseBreakGlass(principal)
   const { password } = await readBodyAs(event, passwordOnlyBody)
   const runtime = await useAuthenticationRuntime()
   let backupCodes: string[]

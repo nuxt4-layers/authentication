@@ -5,7 +5,7 @@ import { forgetPrincipal, trustProxy, useAuthenticationRuntime } from '../../../
 import { assertAcceptablePassword } from '../../../internal/passwords'
 import { systemEvent } from '../../../internal/runtime'
 import { accountKey } from '../../../internal/throttle'
-import { requireAccess } from '../../../internal/guards'
+import { refuseBreakGlass, requireAccess } from '../../../internal/guards'
 import { recordSessionAuthentication } from '../../../internal/mfa'
 
 /**
@@ -14,6 +14,7 @@ import { recordSessionAuthentication } from '../../../internal/mfa'
  */
 export default defineEventHandler(async (event) => {
   const principal = await requireAccess(event, 'sensitive')
+  await refuseBreakGlass(principal)
   const { currentPassword, newPassword } = await readBodyAs(event, changePasswordBody)
   const runtime = await useAuthenticationRuntime()
   const context = await runtime.engine.$context

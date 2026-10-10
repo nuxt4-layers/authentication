@@ -1,5 +1,5 @@
 import { defineEventHandler } from 'h3'
-import { requireAccess } from '../../../../internal/guards'
+import { refuseBreakGlass, requireAccess } from '../../../../internal/guards'
 import { authenticationError, clientInfo, forwardCookies, requestHeaders, sessionTokenFromCookies, translateEngineError } from '../../../../internal/http'
 import { readBodyAs, totpCodeBody } from '../../../../internal/input'
 import { acceptTotpOnce, mergeMethods, recordSessionAuthentication } from '../../../../internal/mfa'
@@ -9,6 +9,7 @@ import { systemEvent } from '../../../../internal/runtime'
 /** Activates TOTP with a first code. The session is rotated and now counts the TOTP factor. */
 export default defineEventHandler(async (event) => {
   const principal = await requireAccess(event, 'enrolment')
+  await refuseBreakGlass(principal)
   const { code } = await readBodyAs(event, totpCodeBody)
   const runtime = await useAuthenticationRuntime()
 
