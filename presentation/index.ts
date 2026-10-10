@@ -9,4 +9,5 @@
 
 export type { AuthenticationMessageKey, AuthenticationMessages } from './messages'
 export { AUTHENTICATION_MESSAGES_EN_GB, formatMessage, resolveMessage } from './messages'
-export { authenticationClasses, DELIBERATE_PAIRINGS } from './utils/authentication-classes'
+export { DELIBERATE_PAIRINGS } from './pairings'
+export { authenticationClasses } from './utils/authentication-classes'
