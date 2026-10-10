@@ -30,6 +30,7 @@ export const AUTHENTICATION_EVENT_TYPES = [
   'authentication.break-glass-provisioned',
   'authentication.break-glass-enrolled',
   'authentication.break-glass-rotated',
+  'authentication.retention-applied',
 ] as const
 
 export type AuthenticationEventType = typeof AUTHENTICATION_EVENT_TYPES[number]
@@ -55,4 +56,14 @@ export interface AuthenticationEvent {
   /** Machine-readable reason, e.g. `invalid-credentials` for a failed sign-in. */
   reason: string | null
   client: AuthenticationEventClient | null
+  /** `authentication.retention-applied` only: how many records of each kind the run deleted. */
+  counts?: AuthenticationRetentionCounts
+}
+
+/** Records deleted by one maintenance run, by kind. Counts only, never identifiers. */
+export interface AuthenticationRetentionCounts {
+  sessions: number
+  credentialRecoveries: number
+  enrolmentTokens: number
+  verifications: number
 }

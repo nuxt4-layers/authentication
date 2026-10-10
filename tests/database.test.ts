@@ -6,6 +6,7 @@ import { AUTHENTICATION_MIGRATIONS, quoteSchema, runAuthenticationMigrations } f
 import { createBreakGlassAccounts, enrolmentTokenDigest } from '../server/internal/break-glass'
 import { buildEngineOptions } from '../server/internal/engine-options'
 import { createCredentialRecoveries } from '../server/internal/recovery'
+import { createRetention } from '../server/internal/retention'
 import { accountKey, clientKey, createSignInThrottle } from '../server/internal/throttle'
 import { createTestDatabase, hasDatabase, requireDatabaseInCi } from './support/database'
 
@@ -179,6 +180,84 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
       await expect(pool.query(`insert into "authentication"."break_glass_enrolment" ("user_id", "token_digest", "expires_at") values ('glass-a', 'plain-token', now())`)).rejects.toThrow(/check constraint/)
       await pool.query(`delete from "authentication"."user" where "id" like 'glass-%'`)
       expect((await pool.query(`select 1 from "authentication"."break_glass_account"`)).rows).toHaveLength(0)
+    })
+  })
+
+  describe('retention schedules', () => {
+    const at = new Date('2027-06-01T00:00:00Z')
+    const daysBefore = (days: number) => new Date(at.getTime() - days * 86_400_000)
+    const retention = resolveAuthenticationPolicy().retention
+    const ids = async (table: string, column: string) =>
+      (await pool.query(`select ${column} as id from "authentication".${table} order by 1`)).rows.map(row => row.id)
+
+    beforeAll(async () => {
+      await pool.query(`insert into "authentication"."user" ("id", "name", "email", "emailVerified") values ('kept-a', '', 'a@kept.test', true), ('kept-b', '', 'b@kept.test', true), ('kept-c', '', 'c@kept.test', true)`)
+      await pool.query(`insert into "authentication"."break_glass_account" ("user_id", "provisioned_at") values ('kept-a', $1), ('kept-b', $1)`, [daysBefore(400)])
+      const sessions: [string, Date][] = [['old', daysBefore(91)], ['recent', daysBefore(89)], ['live', new Date(at.getTime() + 3_600_000)]]
+      for (const [id, expiresAt] of sessions) {
+        await pool.query(`insert into "authentication"."session" ("id", "expiresAt", "token", "updatedAt", "userId") values ($1, $2, $1, $2, 'kept-a')`, [`session-${id}`, expiresAt])
+        await pool.query(`insert into "authentication"."verification" ("id", "identifier", "value", "expiresAt") values ($1, 'challenge', 'value', $2)`, [`verification-${id}`, new Date(expiresAt.getTime() + 60 * 86_400_000)])
+      }
+      await pool.query(`insert into "authentication"."break_glass_enrolment" ("user_id", "token_digest", "expires_at") values ('kept-a', $1, $2), ('kept-b', $3, $4)`, ['a'.repeat(64), daysBefore(31), 'b'.repeat(64), daysBefore(29)])
+      const recoveries = createCredentialRecoveries(pool, 'authentication')
+      await recoveries.record('kept-a', 'password-reset', daysBefore(366))
+      await recoveries.record('kept-b', 'backup-code', daysBefore(366))
+      await recoveries.record('kept-c', 'password-reset', daysBefore(364))
+    })
+
+    afterAll(async () => {
+      await pool.query(`delete from "authentication"."user" where "id" like 'kept-%'`)
+      await pool.query(`delete from "authentication"."verification" where "id" like 'verification-%'`)
+    })
+
+    it('deletes expired sessions and tokens past their periods, and keeps every recovery record without the hold port', async () => {
+      const counts = await createRetention(pool, 'authentication').apply({ at, engineAt: at, retention, holds: null })
+      expect(counts).toEqual({ sessions: 1, credentialRecoveries: 0, enrolmentTokens: 1, verifications: 1 })
+      expect(await ids('"session"', '"id"')).toEqual(['session-live', 'session-recent'])
+      expect(await ids('"verification"', '"id"')).toEqual(['verification-live', 'verification-recent'])
+      expect(await ids('"break_glass_enrolment"', '"user_id"')).toEqual(['kept-b'])
+      expect(await ids('"credential_recovery"', '"user_id"')).toEqual(['kept-a', 'kept-b', 'kept-c'])
+    })
+
+    it('keeps a held person\'s recovery record, and one the port cannot answer for, until the next run', async () => {
+      const asked: unknown[] = []
+      const holds = {
+        async covers(subject: { kind: 'person', id: string }) {
+          asked.push(subject)
+          if (subject.id === 'kept-b') throw new Error('Profile unavailable')
+          return subject.id === 'kept-a'
+        },
+      }
+      const retentionRun = createRetention(pool, 'authentication')
+      expect(await retentionRun.apply({ at, engineAt: at, retention, holds })).toEqual({ sessions: 0, credentialRecoveries: 0, enrolmentTokens: 0, verifications: 0 })
+      expect(asked).toEqual([{ kind: 'person', id: 'kept-a' }, { kind: 'person', id: 'kept-b' }])
+      expect(await ids('"credential_recovery"', '"user_id"')).toEqual(['kept-a', 'kept-b', 'kept-c'])
+
+      // The hold on kept-a ends and the port answers again: both go; kept-c is still within its period.
+      expect(await retentionRun.apply({ at, engineAt: at, retention, holds: { covers: async () => false } }))
+        .toEqual({ sessions: 0, credentialRecoveries: 2, enrolmentTokens: 0, verifications: 0 })
+      expect(await ids('"credential_recovery"', '"user_id"')).toEqual(['kept-c'])
+    })
+
+    it('judges sessions and verification values by the engine\'s clock, never a host clock ahead of it', async () => {
+      await pool.query(`insert into "authentication"."session" ("id", "expiresAt", "token", "updatedAt", "userId") values ('session-engine', $1, 'session-engine', $1, 'kept-a')`, [daysBefore(1)])
+      const ahead = new Date(at.getTime() + 400 * 86_400_000)
+      const counts = await createRetention(pool, 'authentication').apply({ at: ahead, engineAt: at, retention, holds: null })
+      expect(counts).toMatchObject({ sessions: 0, verifications: 0 })
+      expect(await ids('"session"', '"id"')).toContain('session-engine')
+    })
+
+    it('keeps a record recovered again since the run read it', async () => {
+      const recoveries = createCredentialRecoveries(pool, 'authentication')
+      await recoveries.record('kept-a', 'backup-code', daysBefore(400))
+      const holds = {
+        async covers() {
+          await recoveries.record('kept-a', 'password-reset', at)
+          return false
+        },
+      }
+      expect((await createRetention(pool, 'authentication').apply({ at, engineAt: at, retention, holds })).credentialRecoveries).toBe(0)
+      expect(await recoveries.get('kept-a')).toMatchObject({ recoveredAt: at.toISOString() })
     })
   })
 

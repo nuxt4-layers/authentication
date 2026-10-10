@@ -44,6 +44,7 @@ export type {
   AuthenticationEvent,
   AuthenticationEventClient,
   AuthenticationEventType,
+  AuthenticationRetentionCounts,
 } from '../shared/events'
 export { AUTHENTICATION_EVENT_TYPES } from '../shared/events'
 
@@ -80,6 +81,7 @@ export type {
   AuthenticationPublicPolicy,
 } from '../shared/policy'
 export {
+  AUTHENTICATION_RETENTION_BOUNDS,
   DEFAULT_AUTHENTICATION_POLICY,
   publicAuthenticationPolicy,
   resolveAuthenticationPolicy,
@@ -99,6 +101,7 @@ export type {
   AuthenticationClock,
   AuthenticationDatabase,
   AuthenticationEventSink,
+  AuthenticationLegalHolds,
   AuthenticationMailer,
   AuthenticationMessage,
   AuthenticationMessageKind,

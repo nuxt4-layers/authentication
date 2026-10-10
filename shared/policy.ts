@@ -8,6 +8,19 @@ import { z } from 'zod'
  * the default is permitted only within the floors enforced here, and the
  * host's security documentation MUST record the gap and its risk treatment.
  */
+/**
+ * Retention periods in days: default and hard bounds. The shortest recovery
+ * period outlasts Identity's longest recovery hold (14 days), so a record is
+ * never deleted while a hold it reconciles may still run.
+ */
+export const AUTHENTICATION_RETENTION_BOUNDS = Object.freeze({
+  sessionDays: Object.freeze({ default: 90, min: 30, max: 365 }),
+  recoveryDays: Object.freeze({ default: 365, min: 30, max: 730 }),
+  tokenDays: Object.freeze({ default: 30, min: 1, max: 365 }),
+} as const)
+
+const RETENTION_KINDS = ['sessionDays', 'recoveryDays', 'tokenDays'] as const
+
 const policySchema = z.object({
   password: z.object({
     /** NIST SP 800-63-4: at least 15 when the password is the only factor; never fewer than 8. */
@@ -65,9 +78,29 @@ const policySchema = z.object({
      */
     enrolmentTokenMinutes: z.int().min(5).max(1_440),
   }).strict(),
+
+  /**
+   * How long records are kept once their purpose is over (iam-integration's
+   * retention process), in days, within `AUTHENTICATION_RETENTION_BOUNDS`.
+   * A period below its default needs `riskTreatment`.
+   */
+  retention: z.object({
+    /** Ended or expired sessions, from their expiry. */
+    sessionDays: z.int().min(AUTHENTICATION_RETENTION_BOUNDS.sessionDays.min).max(AUTHENTICATION_RETENTION_BOUNDS.sessionDays.max),
+    /** Credential-recovery records, from the recovery. */
+    recoveryDays: z.int().min(AUTHENTICATION_RETENTION_BOUNDS.recoveryDays.min).max(AUTHENTICATION_RETENTION_BOUNDS.recoveryDays.max),
+    /** Expired break-glass enrolment tokens and engine verification values, from their expiry. */
+    tokenDays: z.int().min(AUTHENTICATION_RETENTION_BOUNDS.tokenDays.min).max(AUTHENTICATION_RETENTION_BOUNDS.tokenDays.max),
+    /** Reference to the host's documented risk treatment for a shorter period, or null. */
+    riskTreatment: z.string().min(1).max(200).nullable(),
+  }).strict(),
 }).strict().refine(
   policy => policy.session.idleTimeoutSeconds <= policy.session.absoluteLifetimeSeconds,
   { message: 'session.idleTimeoutSeconds must not exceed session.absoluteLifetimeSeconds', path: ['session'] },
+).refine(
+  policy => policy.retention.riskTreatment !== null
+    || RETENTION_KINDS.every(kind => policy.retention[kind] >= AUTHENTICATION_RETENTION_BOUNDS[kind].default),
+  { message: 'a retention period below its default needs retention.riskTreatment', path: ['retention'] },
 )
 
 export type AuthenticationPolicy = z.infer<typeof policySchema>
@@ -88,6 +121,12 @@ export const DEFAULT_AUTHENTICATION_POLICY: Readonly<AuthenticationPolicy> = Obj
   rememberedDevice: Object.freeze({ days: 0 }),
   emailVerification: 'required' as const,
   breakGlass: Object.freeze({ enrolmentTokenMinutes: 60 }),
+  retention: Object.freeze({
+    sessionDays: AUTHENTICATION_RETENTION_BOUNDS.sessionDays.default,
+    recoveryDays: AUTHENTICATION_RETENTION_BOUNDS.recoveryDays.default,
+    tokenDays: AUTHENTICATION_RETENTION_BOUNDS.tokenDays.default,
+    riskTreatment: null,
+  }),
 })
 
 /**
@@ -105,6 +144,7 @@ export function resolveAuthenticationPolicy(input: AuthenticationPolicyInput = {
     rememberedDevice: { ...defaults.rememberedDevice, ...input.rememberedDevice },
     emailVerification: input.emailVerification ?? defaults.emailVerification,
     breakGlass: { ...defaults.breakGlass, ...input.breakGlass },
+    retention: { ...defaults.retention, ...input.retention },
   })
 }
 

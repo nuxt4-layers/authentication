@@ -80,7 +80,7 @@ Enumeration resistance is part of the contract. `invalid-credentials` covers unk
 
 `AuthenticationEvent` values are emitted after security-relevant facts (`AUTHENTICATION_EVENT_TYPES`, all namespaced `authentication.*`).
 
-Phase 3 adds `authentication.backup-code-used`. Phase 6 adds `authentication.break-glass-provisioned`, `authentication.break-glass-enrolled` (with `method: 'passkey'`) and `authentication.break-glass-rotated` (§12); they carry the principal, never the enrolment token or the address. Sign-in failures carry a machine-readable `reason`, such as `invalid-credentials`, `account-locked`, `rate-limited`, `totp-replayed` or `user-not-verified`.
+Phase 3 adds `authentication.backup-code-used`. Phase 6 adds `authentication.break-glass-provisioned`, `authentication.break-glass-enrolled` (with `method: 'passkey'`) and `authentication.break-glass-rotated` (§12); they carry the principal, never the enrolment token or the address. Phase 7 adds `authentication.retention-applied` (§13), with no principal and with `counts` (`AuthenticationRetentionCounts`), the only event that carries it. Sign-in failures carry a machine-readable `reason`, such as `invalid-credentials`, `account-locked`, `rate-limited`, `totp-replayed` or `user-not-verified`.
 
 Events MUST NOT contain credentials, one-time codes, tokens, session secrets or email addresses. `client.ipAddress` and `client.userAgent` are personal data. The sink owner is responsible for their retention.
 
@@ -90,7 +90,7 @@ Delivery is best effort. A failing sink is reported, but it never changes the ou
 
 A **password reset** and a **sign-in with a backup code** are credential recoveries. Each records, in the layer's own `credential_recovery` table, when the principal's credentials were last recovered and how (`AUTHENTICATION_RECOVERY_METHODS`: `password-reset`, `backup-code`), and then emits `authentication.credentials-recovered` (with `method` `password` or `backup-code` and the recovery method as `reason`).
 
-The record is part of the recovery: if it cannot be written, the reset fails, and a backup-code sign-in is refused (`unavailable`) and its new session removed. The host relays the event to Identity's `recordIdentityCredentialRecovery`, which holds `critical` governance changes the person requests soon afterwards (iam-integration's [recovery process](https://github.com/nuxt4-layers/iam-integration/blob/38e06eb38c10d7415b93d5ab754a5a4a5b4cc910/docs/processes/recovery.md)). Because event delivery is best effort, the host also reconciles from the records with `listAuthenticationCredentialRecoveries` (§7), so a lost event never skips the hold. Records hold only the principal, a time and a method code, and are deleted with the account.
+The record is part of the recovery: if it cannot be written, the reset fails, and a backup-code sign-in is refused (`unavailable`) and its new session removed. The host relays the event to Identity's `recordIdentityCredentialRecovery`, which holds `critical` governance changes the person requests soon afterwards (iam-integration's [recovery process](https://github.com/nuxt4-layers/iam-integration/blob/38e06eb38c10d7415b93d5ab754a5a4a5b4cc910/docs/processes/recovery.md)). Because event delivery is best effort, the host also reconciles from the records with `listAuthenticationCredentialRecoveries` (§7), so a lost event never skips the hold. Records hold only the principal, a time and a method code, and are deleted with the account, or after `retention.recoveryDays` (§13).
 
 ## 5. Configuration contract: `AuthenticationPolicy`
 
@@ -113,6 +113,10 @@ The record is part of the recovery: if it cannot be written, the reset fails, an
 | `emailVerification` | `required` | `required` or `optional` |
 | `rememberedDevice.days` | 0 (off) | 0–30. Days a device may skip the second factor after the user opts in. |
 | `breakGlass.enrolmentTokenMinutes` | 60 | 5–1 440. How long a break-glass enrolment token stays valid (§12). A longer period gives a leaked token longer to be used. |
+| `retention.sessionDays` | 90 | 30–365. How long an expired session is kept (§13). |
+| `retention.recoveryDays` | 365 | 30–730. How long a credential-recovery record is kept (§13). |
+| `retention.tokenDays` | 30 | 1–365. How long an expired break-glass enrolment token or engine verification value is kept (§13). |
+| `retention.riskTreatment` | `null` | A reference to the host's documented risk treatment; required when any retention period is below its default. |
 
 The defaults follow ASVS 5.0 Level 2 and NIST SP 800-63-4 AAL2 guidance. A host that loosens a default MUST record the gap and its risk treatment (Security Architecture §12).
 
@@ -130,6 +134,7 @@ The host supplies these from a Nitro plugin. See [composition-contract.md](compo
 | `provideAuthenticationEventSink` | `AuthenticationEventSink` (`emit(event)`) | No |
 | `provideAuthenticationPolicy` | `AuthenticationPolicyInput` | No, the secure defaults apply |
 | `provideAuthenticationClock` | `AuthenticationClock` (`now(): Date`; §6.2) | No, the system clock applies |
+| `provideAuthenticationLegalHolds` | `AuthenticationLegalHolds` (`covers({ kind: 'person', id })`; §13) | No: without it, every credential-recovery record is kept |
 
 `PostgresPoolLike` is a structural interface satisfied by a `pg` `Pool`. The contract does not depend on the driver package.
 
@@ -182,6 +187,7 @@ These are auto-imported into the host's server code:
 | `listAuthenticationCredentialRecoveries({ after?, limit? })` | Recoveries in the order they happened, up to `limit` (default 100, at most 1000), with `next` to pass as `after`; a principal recovered again moves to a later page. For the host's reconciliation with Identity (§4.1). |
 | `provisionAuthenticationBreakGlass({ identityId, address, correlationId })` | Creates a break-glass identity's passkey-only account and returns `{ enrolmentToken, expiresAt }` (§12). Operator function: server-only, never an endpoint. |
 | `rotateAuthenticationBreakGlass({ identityId, correlationId })` | Deletes the break-glass account's passkeys, ends its sessions, replaces any outstanding token and returns a new `{ enrolmentToken, expiresAt }` (§12). Server-only. |
+| `runAuthenticationMaintenance({ limit? })` | Applies the retention schedules (§13) and returns `{ retention }` with the counts deleted. Server-only: the host schedules it, never an endpoint. |
 | `exportAuthenticationData({ principalId, correlationId })` | Authentication's part of a data-subject access request (`AuthenticationDataExport`), or `null` without an account: the sign-in identifier and whether it was verified, whether a password is set, linked providers, passkeys (name, when added, whether backed up), whether TOTP is enrolled and how many backup codes remain, the sessions in force (times and a coarse client description) and the latest credential recovery. Never a password hash, secret, code, key, token or IP address, and no profile data, which is Profile's. Server-only: the host calls it through iam-integration's coordination adapter, for Profile, which assembles the archive ([data-subject requests](https://github.com/nuxt4-layers/iam-integration/blob/3fb6866e0b6b7abbdf599ea06df9d4b8508482f5/docs/processes/data-subject-requests.md)). |
 
 Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
@@ -428,3 +434,20 @@ With or without an identity port, a break-glass account:
 
 A passkey sign-in gives an aal2, phishing-resistant session, which Identity's break-glass actions require.
 
+## 13. Retention
+
+Authentication's schedules under iam-integration's [retention process](https://github.com/nuxt4-layers/iam-integration/blob/cf0c5be70e162a7a1d426298cf4f13319667caea/docs/processes/retention.md). `runAuthenticationMaintenance()`, which the host schedules, deletes past the policy's periods (`AUTHENTICATION_RETENTION_BOUNDS` gives each default and its bounds):
+
+| Kind | From | Default | Bounds | Paused by |
+|---|---|---|---|---|
+| Sessions (`session`) | Expiry. A signed-out or revoked session is already gone | 90 days | 30–365 days | Nothing |
+| Credential-recovery records (`credential_recovery`) | The recovery | 1 year | 30 days–2 years | A legal hold on the person |
+| Break-glass enrolment tokens (`break_glass_enrolment`) and the engine's verification values (`verification`) | Expiry. A used token is already gone | 30 days | 1–365 days | Nothing |
+
+- Session and verification expiries are the engine's own times, on the system clock (§6.2), so their periods are judged by the system clock too: a host clock ahead of it never deletes a session the engine still honours. Break-glass tokens and recovery records are judged by the layer's clock, which they were kept by.
+- A period below its default needs `retention.riskTreatment`; a period outside its bounds fails `provideAuthenticationPolicy` at start-up.
+- The shortest recovery period (30 days) outlasts Identity's longest recovery hold (336 hours), so a record is never deleted while the hold it reconciles (§4.1) can still run.
+- Before deleting a credential-recovery record, maintenance asks the host's legal-hold port (`provideAuthenticationLegalHolds`, normally iam-integration's `legalHoldsFromMembers` with the `authentication` part, which reads Profile's holds on people). Without the port, or when it fails or answers anything but `false`, the record is kept for the next run. A record recovered again since the run read it is kept.
+- A run reads at most `limit` recovery records (default 1 000, at most 10 000); the rest wait for the next run.
+- A run that deleted anything emits `authentication.retention-applied` with counts by kind (`sessions`, `credentialRecoveries`, `enrolmentTokens`, `verifications`), never an identifier.
+- Accounts, credentials and sign-in identifiers have no schedule: they last as long as the account, and go with it (`deleteAuthenticationAccount`, on Identity's `identity.closed`). Authentication holds nothing scoped to a group or tenant, so it takes no part in group deletion or tenant shutdown.
