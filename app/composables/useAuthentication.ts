@@ -160,6 +160,29 @@ export function useAuthentication() {
       return call<{ status: 'passkey-registered' }>('/passkeys/registration', { response: attestation.data as never, ...(name ? { name } : {}) })
     },
 
+    /**
+     * Break-glass enrolment (ADR-0007), gated by the one-time token alone (no
+     * session): WebAuthn creation options for the token's account.
+     */
+    breakGlassEnrolmentOptions: (token: string) =>
+      call<Record<string, unknown>>('/break-glass/enrolment-options', { token }),
+
+    /** Break-glass enrolment: stores the passkey and consumes the token. Signs nobody in. */
+    enrolBreakGlass: (token: string, response: Record<string, unknown>, name?: string) =>
+      call<{ status: 'passkey-registered' }>('/break-glass/enrolment', { token, response, ...(name ? { name } : {}) }),
+
+    /** The whole break-glass enrolment on this device: options, the browser's passkey creation, then `enrolBreakGlass`. */
+    async enrolBreakGlassPasskey(token: string, name?: string) {
+      const options = await call<Record<string, unknown>>('/break-glass/enrolment-options', { token })
+      if (!options.ok) return options
+      const attestation = await ceremony(async () => {
+        const { startRegistration } = await import('@simplewebauthn/browser')
+        return startRegistration({ optionsJSON: options.data as never })
+      })
+      if (!attestation.ok) return attestation
+      return call<{ status: 'passkey-registered' }>('/break-glass/enrolment', { token, response: attestation.data as never, ...(name ? { name } : {}) })
+    },
+
     /** Identity providers the deployment has enabled. */
     async federationProviders(): Promise<AuthenticationResult<FederationProvider[]>> {
       const result = await call<{ providers: FederationProvider[] }>('/federation/providers', undefined, 'GET')

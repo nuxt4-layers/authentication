@@ -59,6 +59,12 @@ export type {
 export { AUTHENTICATION_RECOVERY_METHODS } from '../shared/recovery'
 
 // ---------------------------------------------------------------------------
+// Break-glass accounts (ADR-0007)
+// ---------------------------------------------------------------------------
+
+export type { AuthenticationBreakGlassEnrolment } from '../shared/break-glass'
+
+// ---------------------------------------------------------------------------
 // Data-subject export
 // ---------------------------------------------------------------------------
 

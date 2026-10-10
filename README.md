@@ -45,6 +45,7 @@ The layer has three parts with one-way dependencies: the **contract** (plain Typ
 The layer also provides these, auto-imported for the host:
 
 - **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `provideAuthenticationIdentity`, `provideAuthenticationClock`, `migrateAuthenticationDatabase`.
+- **Break-glass accounts (ADR-0007), server-only operator functions:** `provisionAuthenticationBreakGlass({ identityId, address, correlationId })` and `rotateAuthenticationBreakGlass({ identityId, correlationId })`, each returning a one-time passkey enrolment token. Never exposed over HTTP; see [docs/contracts.md](docs/contracts.md) §12.
 - **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`. The latter requires aal2 by default while MFA is required.
 - **Client:** the `useAuthentication()` and `useAuthenticationPublicPolicy()` composables, and the `authenticated`, `guest` and `authentication-signed-in` route middleware.
 - **Presentation (optional):** default sign-in, sign-up, password recovery, MFA and security pages at configurable paths, the `Authentication*` form components they are built from, `useAuthenticationText()` and the en-GB message catalogue. `authentication: { presentation: false }` registers none of it.
@@ -111,7 +112,7 @@ const { principal, signOut } = useAuthentication()
 
 ### Default pages
 
-Pages are registered at `/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password`, `/mfa` and `/account/security`. Move or disable them in `nuxt.config.ts`:
+Pages are registered at `/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password`, `/mfa`, `/account/security` and `/break-glass/enrol` (an operator's one-time passkey enrolment for a break-glass account). Move or disable them in `nuxt.config.ts`:
 
 ```ts
 export default defineNuxtConfig({

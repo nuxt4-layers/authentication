@@ -1,6 +1,6 @@
 import { defineEventHandler } from 'h3'
 import { z } from 'zod'
-import { requireAccess } from '../../../../internal/guards'
+import { refuseBreakGlass, requireAccess } from '../../../../internal/guards'
 import { forwardCookies, requestHeaders, safeRedirectPath, translateEngineError } from '../../../../internal/http'
 import { readBodyAs } from '../../../../internal/input'
 import { routeProvider } from '../../../../internal/federation'
@@ -13,7 +13,7 @@ const linkBody = z.object({ redirect: z.string().max(2048).optional() }).strict(
  * recent authentication. Returns the provider URL for the browser to visit.
  */
 export default defineEventHandler(async (event) => {
-  await requireAccess(event, 'sensitive')
+  await refuseBreakGlass(await requireAccess(event, 'sensitive'))
   const runtime = await useAuthenticationRuntime()
   const provider = routeProvider(event, runtime)
   const { redirect } = await readBodyAs(event, linkBody)

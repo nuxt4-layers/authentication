@@ -47,6 +47,7 @@ The host application:
 - when using the default pages with Theme Manager, adds `@import "@nuxt4-layers/authentication/tailwind.css";` after Theme Manager's `presentation.css` in its Tailwind entry, and composes a theme whose pairings meet the contrast requirements in `docs/contracts.md` (Styling), customising it through Theme Manager rather than by overriding its private `--ui-*` variables;
 - overrides or translates page text through `app.config.ts` (`authentication.messages`);
 - sets `NUXT_AUTHENTICATION_TRUST_PROXY=true` only when a reverse proxy overwrites `X-Forwarded-For`, so per-client throttling sees real client addresses;
+- for break-glass accounts (ADR-0007), runs `provisionAuthenticationBreakGlass` from its operator procedure after Identity's `provisionIdentityBreakGlass`, and `rotateAuthenticationBreakGlass` on Identity's `break-glass.used`; hands each returned enrolment token to the operator as `<base URL><routes.breakGlassEnrol>#<token>` over a channel it trusts, never logging it; and never exposes either function over HTTP;
 - integration-tests the composed system, including negative tests.
 
 ## 5. Layer responsibilities

@@ -3,6 +3,7 @@ import { getMigrations } from 'better-auth/db/migration'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolveAuthenticationPolicy } from '../contracts'
 import { AUTHENTICATION_MIGRATIONS, quoteSchema, runAuthenticationMigrations } from '../server/database/migrations'
+import { createBreakGlassAccounts, enrolmentTokenDigest } from '../server/internal/break-glass'
 import { buildEngineOptions } from '../server/internal/engine-options'
 import { createCredentialRecoveries } from '../server/internal/recovery'
 import { accountKey, clientKey, createSignInThrottle } from '../server/internal/throttle'
@@ -39,7 +40,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
       `select table_schema, table_name from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema') order by table_name`,
     )
     expect(rows.every(row => row.table_schema === 'authentication')).toBe(true)
-    expect(rows.map(row => row.table_name)).toEqual(['account', 'credential_recovery', 'passkey', 'schema_migration', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
+    expect(rows.map(row => row.table_name)).toEqual(['account', 'break_glass_account', 'break_glass_enrolment', 'credential_recovery', 'passkey', 'schema_migration', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
   })
 
   it('blanks names and pictures stored by earlier releases (0003)', async () => {
@@ -125,6 +126,59 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
     it('forgets a principal\'s recoveries with the account', async () => {
       await pool.query(`delete from "authentication"."user" where "id" like 'recovered-%'`)
       expect((await createCredentialRecoveries(pool, 'authentication').list()).recoveries).toEqual([])
+    })
+  })
+
+  describe('break-glass enrolment tokens', () => {
+    const secret = 'database-test-secret-that-is-long-enough-0123'
+    const at = (iso: string) => new Date(iso)
+
+    it('keeps at most one outstanding token per account, stored only as a keyed digest', async () => {
+      await pool.query(`insert into "authentication"."user" ("id", "name", "email", "emailVerified") values ('glass-a', '', 'a@glass.test', true), ('glass-b', '', 'b@glass.test', true)`)
+      const accounts = createBreakGlassAccounts(pool, 'authentication', secret)
+      await accounts.register('glass-a', at('2026-10-01T10:00:00Z'))
+      expect(await accounts.is('glass-a')).toBe(true)
+      expect(await accounts.is('glass-b')).toBe(false)
+      const first = await accounts.issue('glass-a', at('2026-10-01T11:00:00Z'))
+      const second = await accounts.issue('glass-a', at('2026-10-01T11:00:00Z'))
+      const { rows } = await pool.query(`select "token_digest" from "authentication"."break_glass_enrolment" where "user_id" = 'glass-a'`)
+      expect(rows).toEqual([{ token_digest: enrolmentTokenDigest(secret, second) }])
+      expect(rows[0].token_digest).not.toContain(second)
+      const now = at('2026-10-01T10:30:00Z')
+      expect(await accounts.live(first, now)).toBeNull()
+      expect(await accounts.live(second, now)).toBe('glass-a')
+      // Another secret derives another digest: the token is useless without the layer's secret.
+      expect(await createBreakGlassAccounts(pool, 'authentication', `${secret}-other`).live(second, now)).toBeNull()
+    })
+
+    it('expires a token by the time it is given', async () => {
+      const accounts = createBreakGlassAccounts(pool, 'authentication', secret)
+      const token = await accounts.issue('glass-a', at('2026-10-01T11:00:00Z'))
+      expect(await accounts.live(token, at('2026-10-01T10:59:59Z'))).toBe('glass-a')
+      expect(await accounts.live(token, at('2026-10-01T11:00:00Z'))).toBeNull()
+      expect(await accounts.challenge(token, 'challenge', at('2026-10-01T11:00:01Z'))).toBeNull()
+      expect(await accounts.consume(token, 'glass-a', at('2026-10-01T11:00:01Z'))).toBe(false)
+    })
+
+    it('hands out each challenge once, and consumes a token once', async () => {
+      const accounts = createBreakGlassAccounts(pool, 'authentication', secret)
+      const now = at('2026-10-01T10:30:00Z')
+      const token = await accounts.issue('glass-a', at('2026-10-01T11:00:00Z'))
+      expect(await accounts.takeChallenge(token, now)).toBeNull()
+      expect(await accounts.challenge(token, 'first', now)).toBe('glass-a')
+      expect(await accounts.challenge(token, 'second', now)).toBe('glass-a')
+      expect(await accounts.takeChallenge(token, now)).toEqual({ principalId: 'glass-a', challenge: 'second' })
+      expect(await accounts.takeChallenge(token, now)).toBeNull()
+      expect(await accounts.consume(token, 'glass-b', now)).toBe(false)
+      expect(await accounts.consume(token, 'glass-a', now)).toBe(true)
+      expect(await accounts.consume(token, 'glass-a', now)).toBe(false)
+      expect(await accounts.live(token, now)).toBeNull()
+    })
+
+    it('rejects anything but a digest, and forgets the account with its user', async () => {
+      await expect(pool.query(`insert into "authentication"."break_glass_enrolment" ("user_id", "token_digest", "expires_at") values ('glass-a', 'plain-token', now())`)).rejects.toThrow(/check constraint/)
+      await pool.query(`delete from "authentication"."user" where "id" like 'glass-%'`)
+      expect((await pool.query(`select 1 from "authentication"."break_glass_account"`)).rows).toHaveLength(0)
     })
   })
 

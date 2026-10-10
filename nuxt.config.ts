@@ -52,6 +52,8 @@ export default defineNuxtConfig({
           // Where the `authenticated` middleware sends sessions that must enrol
           // a second factor or step up to aal2.
           mfa: '/mfa',
+          // Where an operator opens a break-glass enrolment token (`#<token>`).
+          breakGlassEnrol: '/break-glass/enrol',
         },
       },
     },

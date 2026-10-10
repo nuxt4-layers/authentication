@@ -1,6 +1,8 @@
 import type { H3Event } from 'h3'
 import type { AuthenticatedPrincipal } from '../../contracts'
 import { useAuthenticationPolicy } from '../utils/authentication-composition'
+import { authenticationError } from './http'
+import { useAuthenticationRuntime } from './nitro'
 import { requireAuthenticatedPrincipal } from '../utils/authentication-principal'
 
 /**
@@ -22,4 +24,14 @@ export function requireAccess(event: H3Event, level: AccessLevel): Promise<Authe
     case 'standard': return requireAuthenticatedPrincipal(event)
     case 'sensitive': return requireAuthenticatedPrincipal(event, { maxAuthenticationAgeSeconds: maxAge })
   }
+}
+
+/**
+ * Refuses a break-glass account (ADR-0007) any credential but the passkey it
+ * enrols with a one-time token: no password, authenticator app, backup codes,
+ * provider link or further passkey. Answers `account-restricted`.
+ */
+export async function refuseBreakGlass(principal: AuthenticatedPrincipal): Promise<void> {
+  const runtime = await useAuthenticationRuntime()
+  if (await runtime.breakGlass.is(principal.principalId)) throw authenticationError('account-restricted')
 }

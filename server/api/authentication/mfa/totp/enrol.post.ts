@@ -1,5 +1,5 @@
 import { defineEventHandler } from 'h3'
-import { requireAccess } from '../../../../internal/guards'
+import { refuseBreakGlass, requireAccess } from '../../../../internal/guards'
 import { requestHeaders, translateEngineError } from '../../../../internal/http'
 import { passwordOnlyBody, readBodyAs } from '../../../../internal/input'
 import { useAuthenticationRuntime } from '../../../../internal/nitro'
@@ -10,7 +10,7 @@ import { useAuthenticationRuntime } from '../../../../internal/nitro'
  * not active until `POST /mfa/totp/confirm` proves the authenticator works.
  */
 export default defineEventHandler(async (event) => {
-  await requireAccess(event, 'enrolment')
+  await refuseBreakGlass(await requireAccess(event, 'enrolment'))
   const { password } = await readBodyAs(event, passwordOnlyBody)
   const runtime = await useAuthenticationRuntime()
   try {

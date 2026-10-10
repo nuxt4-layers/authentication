@@ -5,7 +5,7 @@
 
 ## 1. Purpose
 
-The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, `@nuxt4-layers/authentication/presentation` (page text and styling, §11), `@nuxt4-layers/authentication/tailwind.css` (a Tailwind source declaration, §11), the server composition functions listed in §6, the client surface in §9, and the default pages and components in §11.
+The authentication capability's supported cross-layer surface is the package root (the Nuxt layer), `@nuxt4-layers/authentication/contracts`, `@nuxt4-layers/authentication/capability`, `@nuxt4-layers/authentication/presentation` (page text and styling, §11), `@nuxt4-layers/authentication/tailwind.css` (a Tailwind source declaration, §11), the server composition functions listed in §6, the client surface in §9, and the default pages and components in §11, and the break-glass functions and endpoints in §12.
 
 The surface has three parts with one-way dependencies, described in [architecture.md](architecture.md): the **contract** (`./contracts`, plain TypeScript), the **core** (server, endpoints, client API and route middleware) and the **presentation** (pages, components, text and styling). Code that only needs to know who is signed in uses the contract and the core, and can turn the presentation off.
 
@@ -80,7 +80,7 @@ Enumeration resistance is part of the contract. `invalid-credentials` covers unk
 
 `AuthenticationEvent` values are emitted after security-relevant facts (`AUTHENTICATION_EVENT_TYPES`, all namespaced `authentication.*`).
 
-Phase 3 adds `authentication.backup-code-used`. Sign-in failures carry a machine-readable `reason`, such as `invalid-credentials`, `account-locked`, `rate-limited`, `totp-replayed` or `user-not-verified`.
+Phase 3 adds `authentication.backup-code-used`. Phase 6 adds `authentication.break-glass-provisioned`, `authentication.break-glass-enrolled` (with `method: 'passkey'`) and `authentication.break-glass-rotated` (§12); they carry the principal, never the enrolment token or the address. Sign-in failures carry a machine-readable `reason`, such as `invalid-credentials`, `account-locked`, `rate-limited`, `totp-replayed` or `user-not-verified`.
 
 Events MUST NOT contain credentials, one-time codes, tokens, session secrets or email addresses. `client.ipAddress` and `client.userAgent` are personal data. The sink owner is responsible for their retention.
 
@@ -112,6 +112,7 @@ The record is part of the recovery: if it cannot be written, the reset fails, an
 | `mfa` | `required` | `required` or `optional` |
 | `emailVerification` | `required` | `required` or `optional` |
 | `rememberedDevice.days` | 0 (off) | 0–30. Days a device may skip the second factor after the user opts in. |
+| `breakGlass.enrolmentTokenMinutes` | 60 | 5–1 440. How long a break-glass enrolment token stays valid (§12). A longer period gives a leaked token longer to be used. |
 
 The defaults follow ASVS 5.0 Level 2 and NIST SP 800-63-4 AAL2 guidance. A host that loosens a default MUST record the gap and its risk treatment (Security Architecture §12).
 
@@ -179,6 +180,8 @@ These are auto-imported into the host's server code:
 | `discardAuthenticationAccount(principalId)` | Removes an account whose sign-in identifier was never verified; `authentication.account-deleted` (§6.1). |
 | `deleteAuthenticationAccount(principalId)` | Deletes an account with its credentials, sessions and sign-in identifier; `authentication.account-deleted` (§6.1). |
 | `listAuthenticationCredentialRecoveries({ after?, limit? })` | Recoveries in the order they happened, up to `limit` (default 100, at most 1000), with `next` to pass as `after`; a principal recovered again moves to a later page. For the host's reconciliation with Identity (§4.1). |
+| `provisionAuthenticationBreakGlass({ identityId, address, correlationId })` | Creates a break-glass identity's passkey-only account and returns `{ enrolmentToken, expiresAt }` (§12). Operator function: server-only, never an endpoint. |
+| `rotateAuthenticationBreakGlass({ identityId, correlationId })` | Deletes the break-glass account's passkeys, ends its sessions, replaces any outstanding token and returns a new `{ enrolmentToken, expiresAt }` (§12). Server-only. |
 | `exportAuthenticationData({ principalId, correlationId })` | Authentication's part of a data-subject access request (`AuthenticationDataExport`), or `null` without an account: the sign-in identifier and whether it was verified, whether a password is set, linked providers, passkeys (name, when added, whether backed up), whether TOTP is enrolled and how many backup codes remain, the sessions in force (times and a coarse client description) and the latest credential recovery. Never a password hash, secret, code, key, token or IP address, and no profile data, which is Profile's. Server-only: the host calls it through iam-integration's coordination adapter, for Profile, which assembles the archive ([data-subject requests](https://github.com/nuxt4-layers/iam-integration/blob/3fb6866e0b6b7abbdf599ea06df9d4b8508482f5/docs/processes/data-subject-requests.md)). |
 
 Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
@@ -227,6 +230,15 @@ Access levels:
 
 `POST /password/change` is now **sensitive**: it requires the required level and a recent authentication.
 
+### Break-glass enrolment endpoints
+
+Gated by a one-time enrolment token, not a session (§12). Every refusal (an unknown, used or expired token, a spent challenge, a failed or unverified registration, or a malformed body) answers the same `invalid-or-expired-token` (400) and counts against the client's sign-in throttle (`rate-limited` once over it). The origin check applies as everywhere. `Cache-Control: no-store`.
+
+| Method and path | Access | Body | Success | Notes |
+|---|---|---|---|---|
+| `POST /break-glass/enrolment-options` | token | `{ token }` | 200 WebAuthn creation options | `residentKey: 'required'`, `userVerification: 'required'`, `attestation: 'none'`, the engine's relying party. Binds a fresh challenge to the token, replacing any earlier one. |
+| `POST /break-glass/enrolment` | token | `{ token, response, name? }` | 200 `{ status: 'passkey-registered' }` | Uses the challenge once, refuses an authenticator that did not verify the user, stores the passkey and consumes the token. Sets no session cookie and ends nothing else. `authentication.break-glass-enrolled`, and a security notice to the account's address. |
+
 ### Federation endpoints
 
 Providers: `google`, `microsoft`, `github`, `facebook` and one generic `oidc` provider. Each is enabled only when configured.
@@ -261,6 +273,7 @@ Federation rules:
 | `requiredLevel` | The policy's required assurance level. |
 | `needsSecondFactor` | True when signed in below `requiredLevel`. |
 | `federationProviders`, `linkedAccounts`, `linkProvider`, `unlinkProvider` | Federation, as `AuthenticationResult<T>`. `signInWithProvider(provider, redirect?)` navigates to the provider. `linkProvider` navigates on success. |
+| `breakGlassEnrolmentOptions(token)`, `enrolBreakGlass(token, response, name?)`, `enrolBreakGlassPasskey(token, name?)` | Break-glass enrolment (§12), as `AuthenticationResult<T>`: the creation options, the enrolment itself, or both around the browser's passkey creation. They need no session and sign nobody in. |
 | `signUp`, `signIn`, `verifySecondFactor`, `signInWithPasskey`, `reauthenticate`, `signOut`, `requestPasswordReset`, `resetPassword`, `changePassword`, `mfaStatus`, `enrolTotp`, `confirmTotp`, `disableTotp`, `regenerateBackupCodes`, `registerPasskey`, `removePasskey`, `listSessions`, `revokeSession`, `revokeOtherSessions` | Each resolves to `AuthenticationResult<T>`: `{ ok: true, data }` or `{ ok: false, code }`. `signIn` may return `{ status: 'second-factor-required' }`. Passkey ceremonies use `@simplewebauthn/browser`, and a cancelled ceremony answers `validation-failed`. |
 
 `useAuthenticationPublicPolicy()` is also auto-imported. It returns a ref to the `AuthenticationPublicPolicy`, loaded once per request and shared. Interfaces, including the default pages, read the policy through it rather than calling the endpoint.
@@ -289,6 +302,7 @@ These are public runtime config values under `authentication.routes`. They belon
 | `resetPassword` | `/reset-password` | Path in password-reset emails (`?token=`) |
 | `mfa` | `/mfa` | `authenticated` middleware target for enrolment or step-up |
 | `security` | `/account/security` | Security settings page |
+| `breakGlassEnrol` | `/break-glass/enrol` | Where an operator opens a break-glass enrolment link, `<base URL><path>#<token>` (§12) |
 
 When the default pages are enabled, the paths chosen in `authentication.pages.paths` (§11) are written into these route values at build time, so links, redirects and emails always point at pages that exist.
 
@@ -315,7 +329,7 @@ With `presentation: false` the server, endpoints, `useAuthentication()`, `useAut
 
 ### Pages
 
-When enabled, the layer registers six pages:
+When enabled, the layer registers seven pages:
 
 | Key | Default path | Page | Middleware |
 |---|---|---|---|
@@ -325,12 +339,13 @@ When enabled, the layer registers six pages:
 | `resetPassword` | `/reset-password` | Choose a new password from the emailed link | none |
 | `mfa` | `/mfa` | Enrol a second factor (authenticator app or passkey) or step up | `authentication-signed-in` |
 | `security` | `/account/security` | Password, authenticator app and backup codes, passkeys, linked providers, sessions | `authenticated` |
+| `breakGlassEnrol` | `/break-glass/enrol` | Registers a break-glass account's passkey from the token in the URL fragment (§12): one action, then a reminder to store the device offline; no links to any other page | none |
 
 Each page has one `<main>` landmark, one `h1`, a document title and the `lang` of `authentication.locale`.
 
 ### Components
 
-Registered with the `Authentication` prefix (when `presentation` is on), for hosts that build their own pages: `AuthenticationSignInForm`, `AuthenticationSignUpForm`, `AuthenticationForgotPasswordForm`, `AuthenticationResetPasswordForm`, `AuthenticationMfaPanel`, `AuthenticationTotpEnrolment`, `AuthenticationBackupCodes`, `AuthenticationReauthenticate`, `AuthenticationSecuritySettings`, `AuthenticationProviderButtons`, `AuthenticationField` and `AuthenticationAlert`. Their props and events are documented in each component's header. They render no page chrome, so a host may place them in its own layout.
+Registered with the `Authentication` prefix (when `presentation` is on), for hosts that build their own pages: `AuthenticationSignInForm`, `AuthenticationSignUpForm`, `AuthenticationForgotPasswordForm`, `AuthenticationResetPasswordForm`, `AuthenticationMfaPanel`, `AuthenticationTotpEnrolment`, `AuthenticationBackupCodes`, `AuthenticationReauthenticate`, `AuthenticationSecuritySettings`, `AuthenticationBreakGlassEnrolment`, `AuthenticationProviderButtons`, `AuthenticationField` and `AuthenticationAlert`. Their props and events are documented in each component's header. They render no page chrome, so a host may place them in its own layout.
 
 `authenticationClasses` (auto-imported, and exported from `./presentation`) holds the utility classes the components use, all taken from the `SemanticPresentationTheme` vocabulary. `DELIBERATE_PAIRINGS` is exported from `./presentation` only, not auto-imported, so it never collides with the lists of the same name from Identity and Profile in a host.
 
@@ -372,3 +387,44 @@ export default defineAppConfig({
 ```
 
 The locale is `authentication.locale`. A key resolves to the host override for that locale, then the en-GB default, then the key itself. `{name}` placeholders are filled from parameters, and unknown placeholders stay visible so gaps are noticed. `useAuthenticationText()` returns `{ locale, t }`, and `resolveMessage` and `formatMessage` are exported for server or test use. Each error code `<code>` has the message `authentication.error.<code>`.
+
+## 12. Break-glass accounts (ADR-0007)
+
+A break-glass account is the Authentication side of an Identity `break-glass` identity, which Identity provisions with its migration role (`provisionIdentityBreakGlass`). The identity has no personal group, memberships or roles; each break-glass action in Identity needs a phishing-resistant aal2 authentication within 15 minutes, and every use alerts every operator and opens a mandatory review (iam-integration's approvals process). Authentication's part is the account and its passkey.
+
+### Provisioning and rotation
+
+Both are operator functions (§7): server-only, never an HTTP endpoint.
+
+- `provisionAuthenticationBreakGlass({ identityId, address, correlationId })` creates the account under `identityId`, the identifier Identity issued (the identity port's `reserve` is not called, and neither is `confirm`: Identity creates break-glass identities active). Its sign-in identifier is `address`, an address the operator chooses and attests, marked verified and used only for security notices. The engine's `name` stays `''` and `image` `null`. It has no password and no other credential. The layer records the account as break-glass in its own `break_glass_account` table, so it stays passkey-only with or without an identity port. It refuses (`validation-failed`) an identity or an address that already has an account, or malformed input. It emits `authentication.break-glass-provisioned` (not `account-registered`) and returns `{ enrolmentToken, expiresAt }`.
+- `rotateAuthenticationBreakGlass({ identityId, correlationId })` replaces any outstanding enrolment token, then deletes every passkey of the account and ends every session, emits `authentication.break-glass-rotated` and returns a new `{ enrolmentToken, expiresAt }`. The host calls it on Identity's `break-glass.used`, so the passkey is replaced after each use. It refuses (`validation-failed`) any account that is not break-glass.
+
+`AuthenticationBreakGlassEnrolment` (`./contracts`) is `{ enrolmentToken, expiresAt }`. The `correlationId` ties the call to the host's operator procedure; the layer's events have no field for it, so it is not stored.
+
+### Enrolment tokens
+
+- 32 random bytes, base64url; returned once by the function and never stored, logged or put in an event.
+- Stored only as an HMAC-SHA-256 digest keyed with a key derived from `NUXT_AUTHENTICATION_SECRET` for this purpose (the mechanism backup codes use).
+- At most one outstanding per account: issuing a new one replaces the old.
+- Single use: the enrolment consumes it. It expires after `breakGlass.enrolmentTokenMinutes` (default 60, 5–1 440), by the layer's clock (§6.2).
+- The operator opens `<base URL><routes.breakGlassEnrol>#<token>` on the offline device. The token is in the fragment, which the browser never sends to a server or in a Referer; the page reads it in the browser and posts it in a request body.
+
+### The WebAuthn ceremony
+
+The engine's passkey registration needs a signed-in session (its registration endpoints use a fresh-session middleware, and the challenge is bound to a signed cookie). Turning that off is a global engine switch (`registration.requireSession: false`) that would loosen the session-bound registration too, and the engine would then register the passkey for whatever session the request happened to carry. So the enrolment endpoints run the ceremony with `@simplewebauthn/server`, the library the engine itself uses (a direct dependency at the engine's version), with exactly the relying party the engine is configured with (its passkey plugin's `rpID`, `rpName` and `origin`):
+
+- the challenge is held server-side, bound to the token's digest, replaced by each request for options and used once, whatever the outcome, and it expires with the token;
+- user verification is required, both in the verification and by the layer's own check of the UV flag (`registrationUserVerified`), as for every passkey;
+- the credential is stored through the engine's adapter in the engine's `passkey` table, in the engine's own encoding, so the engine's normal passkey sign-in (`POST /passkeys/authentication`) finds it;
+- the token is consumed after the passkey is stored; if a rotation replaced it meanwhile, the passkey is withdrawn and the enrolment refused, so a rotation always ends with no passkey from an older token.
+
+### Passkey-only, enforced by the layer
+
+With or without an identity port, a break-glass account:
+
+- signs in by passkey alone: any other sign-in is refused as `invalid-credentials`, like the identity port's `passkeyOnly`;
+- never gets a password: no reset link is sent (the response is the same as for any address), and the engine's account hook refuses to create a password or provider account for it, so a reset fails rather than setting one;
+- cannot enrol an authenticator app or backup codes, change a password, link a provider or register a further passkey through the session endpoints: these answer `account-restricted` (403). Its passkeys come only from enrolment tokens.
+
+A passkey sign-in gives an aal2, phishing-resistant session, which Identity's break-glass actions require.
+

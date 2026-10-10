@@ -23,6 +23,8 @@ export interface EngineHooks {
   reserveIdentity(): Promise<string | null>
   /** The account's sign-in identifier is verified. */
   confirmIdentity(input: { userId: string }): Promise<void>
+  /** Whether the account is a break-glass account, which holds nothing but passkeys. */
+  isBreakGlass(userId: string): Promise<boolean>
 }
 
 export interface EngineConfig {
@@ -242,7 +244,12 @@ export function buildEngineOptions(config: EngineConfig) {
         // Data minimisation: the layer needs only the provider's identity, never
         // its tokens. The engine would otherwise keep ID tokens in plain text.
         create: {
-          before: async account => ({ data: withoutProviderTokens(account) }),
+          // A break-glass account holds passkeys only: never a password (a reset
+          // would otherwise create one) or a provider link.
+          before: async (account) => {
+            if (account.userId && await config.hooks?.isBreakGlass(account.userId)) return false
+            return { data: withoutProviderTokens(account) }
+          },
           after: async (account) => {
             if (account.providerId !== 'credential') {
               await config.hooks?.onIdentityLinked({ userId: account.userId, providerId: account.providerId })
