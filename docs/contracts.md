@@ -155,7 +155,7 @@ The host also acts on Identity's events with these server helpers (§7), althoug
 
 ### 6.2 Clock
 
-Each member of the IAM suite reads the current time from a clock port the host may supply (iam-integration's architecture, section 7 "Time"). Here it is `provideAuthenticationClock({ now(): Date })`; `useAuthenticationClock()` returns it, or the system clock when the host supplies none. The host supplies the same clock to every member, or none, because times cross members: the authentication time Authentication records is judged against Identity's safety periods.
+Each member of the IAM suite reads the current time from a clock port the host may supply ([iam-integration's architecture §7](https://github.com/nuxt4-layers/iam-integration/blob/e986245d746507bf7093ca203e346ab1b571e3a8/docs/architecture.md#7-time)). Here it is `provideAuthenticationClock({ now(): Date })`; `useAuthenticationClock()` returns it, or the system clock when the host supplies none. The host supplies the same clock to every member, or none, because times cross members: the authentication time Authentication records is judged against Identity's safety periods.
 
 | Time | Clock |
 |---|---|
