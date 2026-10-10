@@ -3,6 +3,7 @@ import { decodeAttestationObject, isoBase64URL, parseAuthenticatorData } from '@
 import { symmetricDecrypt } from 'better-auth/crypto'
 import type { AuthenticationMethod, PostgresPoolLike } from '../../contracts'
 import { quoteSchema } from '../database/migrations'
+import { currentTime } from './clock'
 import type { AuthenticationRuntime } from './runtime'
 
 /** PRIVATE. Multi-factor helpers the engine does not provide. */
@@ -15,7 +16,7 @@ export function mergeMethods(existing: readonly AuthenticationMethod[], added: r
   return [...new Set([...existing, ...added])]
 }
 
-/** Records how and when a session was (re-)authenticated; drives the principal's assurance. */
+/** Records how and when (by the layer's clock) a session was (re-)authenticated; drives the principal's assurance. */
 export async function recordSessionAuthentication(
   runtime: AuthenticationRuntime,
   sessionToken: string,
@@ -23,7 +24,7 @@ export async function recordSessionAuthentication(
 ): Promise<void> {
   const context = await runtime.engine.$context
   await context.internalAdapter.updateSession(sessionToken, {
-    authenticatedAt: new Date(),
+    authenticatedAt: currentTime(),
     authenticationMethods: methods.join(','),
   })
 }
@@ -44,7 +45,10 @@ function hotp(key: Buffer, counter: number): string {
   return binary.toString().padStart(DIGITS, '0')
 }
 
-/** The time step a valid code belongs to (window ±1 step), or null when it matches none. */
+/**
+ * The time step a valid code belongs to (window ±1 step), or null when it
+ * matches none. On the system clock: authenticator apps compute codes from real time.
+ */
 export function matchTotpStep(secret: string, code: string, now: number = Date.now()): number | null {
   if (!/^\d{6}$/.test(code)) return null
   const key = Buffer.from(secret, 'utf8')

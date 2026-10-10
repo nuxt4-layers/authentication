@@ -63,3 +63,17 @@ export interface AuthenticationMailer {
 export interface AuthenticationEventSink {
   emit(event: AuthenticationEvent): void | Promise<void>
 }
+
+/**
+ * Clock port (iam-integration's architecture, "Time"). Every time the layer
+ * keeps or judges (when something happened, and whether an authentication is
+ * recent) comes from `now()`. The host supplies the suite's one clock, or
+ * none, and the layer uses the system clock.
+ *
+ * A clock is trusted like a key: only the host composes it, from server code.
+ * A clock that throws or answers anything but a valid `Date` fails the
+ * operation closed (`unavailable`); the layer never falls back to another time.
+ */
+export interface AuthenticationClock {
+  now(): Date
+}

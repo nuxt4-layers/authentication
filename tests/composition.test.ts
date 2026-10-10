@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuthenticationEvent } from '../contracts'
 import { AuthenticationCompositionError, DEFAULT_AUTHENTICATION_POLICY } from '../contracts'
+import { currentTime } from '../server/internal/clock'
 import {
   clearAuthenticationComposition,
   emitAuthenticationEvent,
+  provideAuthenticationClock,
   provideAuthenticationDatabase,
   provideAuthenticationEventSink,
   provideAuthenticationMailer,
   provideAuthenticationPolicy,
+  useAuthenticationClock,
   useAuthenticationDatabase,
   useAuthenticationMailer,
   useAuthenticationPolicy,
@@ -87,5 +90,49 @@ describe('Authentication composition ports', () => {
     await expect(emitAuthenticationEvent(event)).resolves.toBeUndefined()
     expect(error).toHaveBeenCalledOnce()
     expect(String(error.mock.calls[0])).toContain('authentication.signed-in')
+  })
+
+  it('uses the system clock when the host supplies none', () => {
+    const before = Date.now()
+    const now = currentTime().getTime()
+    expect(now).toBeGreaterThanOrEqual(before)
+    expect(now).toBeLessThanOrEqual(Date.now())
+    expect(useAuthenticationClock().now()).toBeInstanceOf(Date)
+  })
+
+  it('takes every time from a supplied clock', () => {
+    provideAuthenticationClock({ now: () => new Date('2031-01-02T03:04:05.000Z') })
+    expect(currentTime().toISOString()).toBe('2031-01-02T03:04:05.000Z')
+  })
+
+  it('rejects a clock without now()', () => {
+    expect(() => provideAuthenticationClock({} as never)).toThrow(TypeError)
+    expect(() => provideAuthenticationClock(null as never)).toThrow(TypeError)
+  })
+
+  it.each([
+    ['throws', () => { throw new Error('clock service down') }],
+    ['answers an invalid date', () => new Date('not a date')],
+    ['answers a timestamp instead of a Date', () => Date.now()],
+    ['answers a string', () => '2031-01-02T03:04:05.000Z'],
+    ['answers nothing', () => undefined],
+  ])('fails closed as unavailable when the clock %s, never falling back', (_label, now) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    provideAuthenticationClock({ now: now as never })
+    let failure: unknown
+    try {
+      currentTime()
+    }
+    catch (error) {
+      failure = error
+    }
+    expect(failure).toMatchObject({ statusCode: 503, data: { code: 'unavailable' } })
+  })
+
+  it('hands out a copy, so nothing can move the host\'s clock', () => {
+    const fixed = new Date('2031-01-02T03:04:05.000Z')
+    provideAuthenticationClock({ now: () => fixed })
+    currentTime().setFullYear(1999)
+    expect(fixed.toISOString()).toBe('2031-01-02T03:04:05.000Z')
   })
 })

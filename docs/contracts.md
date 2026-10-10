@@ -128,6 +128,7 @@ The host supplies these from a Nitro plugin. See [composition-contract.md](compo
 | `provideAuthenticationMailer` | `AuthenticationMailer` (`send(message)`) | Yes |
 | `provideAuthenticationEventSink` | `AuthenticationEventSink` (`emit(event)`) | No |
 | `provideAuthenticationPolicy` | `AuthenticationPolicyInput` | No, the secure defaults apply |
+| `provideAuthenticationClock` | `AuthenticationClock` (`now(): Date`; §6.2) | No, the system clock applies |
 
 `PostgresPoolLike` is a structural interface satisfied by a `pg` `Pool`. The contract does not depend on the driver package.
 
@@ -151,6 +152,18 @@ The host also acts on Identity's events with these server helpers (§7), althoug
 | `identity.provisioning-expired` | `discardAuthenticationAccount(principalId)` (only an unverified account) |
 | `identity.closed` | `deleteAuthenticationAccount(principalId)` (credentials, sessions and the sign-in identifier) |
 
+### 6.2 Clock
+
+Each member of the IAM suite reads the current time from a clock port the host may supply (iam-integration's architecture, section 7 "Time"). Here it is `provideAuthenticationClock({ now(): Date })`; `useAuthenticationClock()` returns it, or the system clock when the host supplies none. The host supplies the same clock to every member, or none, because times cross members: the authentication time Authentication records is judged against Identity's safety periods.
+
+| Time | Clock |
+|---|---|
+| When something happened: every event's `occurredAt`, a credential recovery's `recoveredAt`, `authenticatedAt` recorded for a session's authentication (sign-in, second factor, step-up, re-authentication, new and rotated sessions), a data-subject export's `exportedAt`, and a break-glass enrolment token's `expiresAt` (§12) | The layer's clock |
+| Whether an authentication is recent: `maxAuthenticationAgeSeconds` in `requireAuthenticatedPrincipal`, and so the `enrolment` and `sensitive` access levels (§8); whether a break-glass enrolment token has expired | The layer's clock |
+| The engine's own times: a session's idle and absolute lifetime (`expiresAt`), sign-in throttling and lockout windows, TOTP time steps (an authenticator app computes them from real time), and the expiry of email links the engine issues (verification, password reset) | The system clock, always |
+
+A clock that throws, or answers anything but a valid `Date`, fails the operation as `unavailable` (503); the layer never falls back to the system clock. A clock is trusted like a key: whoever supplies it decides whether an authentication is recent. Only the host composes it, from server code; no request can set or move it, and a clock that can be moved is for tests only (the threat model's control register).
+
 ## 7. Server helpers
 
 These are auto-imported into the host's server code:
@@ -158,7 +171,7 @@ These are auto-imported into the host's server code:
 | Function | Behaviour |
 |---|---|
 | `getAuthenticatedPrincipal(event)` | The current `AuthenticatedPrincipal`, or `null`. Resolved once per request. |
-| `requireAuthenticatedPrincipal(event, requirement?)` | The principal, or throws `unauthenticated` (401), `insufficient-assurance` (403) or `reauthentication-required` (401). `minimumLevel` **defaults to the policy's required level**: `aal2` while `mfa: 'required'` (the default). Pass `{ minimumLevel: 'aal1' }` to accept sessions that have not completed a second factor. |
+| `requireAuthenticatedPrincipal(event, requirement?)` | The principal, or throws `unauthenticated` (401), `insufficient-assurance` (403) or `reauthentication-required` (401); the age of the authentication is judged by the layer's clock (§6.2). `minimumLevel` **defaults to the policy's required level**: `aal2` while `mfa: 'required'` (the default). Pass `{ minimumLevel: 'aal1' }` to accept sessions that have not completed a second factor. |
 | `requiredAssuranceLevel()` | `'aal2'` when the policy requires MFA, otherwise `'aal1'`. |
 | `migrateAuthenticationDatabase()` | Applies pending migrations to the capability schema. Requests wait for it to finish. |
 | `getAuthenticationCredentialRecovery(principalId)` | The principal's latest credential recovery (`AuthenticationCredentialRecovery`: `principalId`, `recoveredAt`, `method`), or `null` (§4.1). |

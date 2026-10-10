@@ -1,5 +1,6 @@
 import type { AuthenticationCredentialRecovery, AuthenticationCredentialRecoveryPage, AuthenticationRecoveryMethod, PostgresPoolLike } from '../../contracts'
 import { quoteSchema } from '../database/migrations'
+import { currentTime } from './clock'
 
 /**
  * PRIVATE. Durable credential recovery records (one row per principal, the
@@ -42,8 +43,8 @@ export function createCredentialRecoveries(pool: PostgresPoolLike, schema: strin
   const query = (text: string, values: unknown[]) => pool.query(text, values) as Promise<{ rows: Row[] }>
 
   return {
-    /** Records a recovery; an earlier time never replaces a later one. */
-    async record(principalId: string, method: AuthenticationRecoveryMethod, at: Date = new Date()): Promise<void> {
+    /** Records a recovery at the layer's clock time (or `at`); an earlier time never replaces a later one. */
+    async record(principalId: string, method: AuthenticationRecoveryMethod, at: Date = currentTime()): Promise<void> {
       await query(
         `insert into ${table} ("user_id", "recovered_at", "method") values ($1, $2, $3)
          on conflict ("user_id") do update set "recovered_at" = excluded."recovered_at", "method" = excluded."method"

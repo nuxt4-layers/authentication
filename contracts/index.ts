@@ -90,6 +90,7 @@ export { safeRedirectPath } from '../shared/redirect'
 // ---------------------------------------------------------------------------
 
 export type {
+  AuthenticationClock,
   AuthenticationDatabase,
   AuthenticationEventSink,
   AuthenticationMailer,

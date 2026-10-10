@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from 'better-auth'
 import { genericOAuth, twoFactor } from 'better-auth/plugins'
 import { PostgresDialect } from 'kysely'
 import type { AuthenticationPolicy, PostgresPoolLike } from '../../contracts'
+import { currentTime } from './clock'
 import { federationCallbackUrl, type EnabledProvider } from './federation-config'
 
 /**
@@ -135,7 +136,8 @@ export function buildEngineOptions(config: EngineConfig) {
     },
     session: {
       // Sliding expiry implements the idle timeout; the absolute lifetime is
-      // enforced by the principal resolver from `createdAt`.
+      // enforced by the principal resolver from `createdAt`. Both are the
+      // engine's own times, on the system clock.
       expiresIn: policy.session.idleTimeoutSeconds,
       updateAge: Math.max(60, Math.floor(policy.session.idleTimeoutSeconds / 4)),
       // Freshness is enforced by the layer from `authenticatedAt`, which step-up
@@ -260,7 +262,7 @@ export function buildEngineOptions(config: EngineConfig) {
             return {
               data: {
                 ...session,
-                authenticatedAt: record.authenticatedAt ?? new Date(),
+                authenticatedAt: record.authenticatedAt ?? currentTime(),
                 authenticationMethods: record.authenticationMethods ?? '',
               },
             }

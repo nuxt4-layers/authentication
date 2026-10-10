@@ -44,7 +44,7 @@ The layer has three parts with one-way dependencies: the **contract** (plain Typ
 
 The layer also provides these, auto-imported for the host:
 
-- **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `migrateAuthenticationDatabase`.
+- **Composition, server side:** `provideAuthenticationDatabase`, `provideAuthenticationMailer`, `provideAuthenticationEventSink`, `provideAuthenticationPolicy`, `provideAuthenticationIdentity`, `provideAuthenticationClock`, `migrateAuthenticationDatabase`.
 - **Protecting server routes:** `getAuthenticatedPrincipal(event)`, `requireAuthenticatedPrincipal(event, requirement?)`. The latter requires aal2 by default while MFA is required.
 - **Client:** the `useAuthentication()` and `useAuthenticationPublicPolicy()` composables, and the `authenticated`, `guest` and `authentication-signed-in` route middleware.
 - **Presentation (optional):** default sign-in, sign-up, password recovery, MFA and security pages at configurable paths, the `Authentication*` form components they are built from, `useAuthenticationText()` and the en-GB message catalogue. `authentication: { presentation: false }` registers none of it.
@@ -88,6 +88,7 @@ export default defineNitroPlugin(() => {
   provideAuthenticationMailer({ send: message => mailer.send(message) })  // required
   provideAuthenticationEventSink({ emit: event => audit.record(event) })  // optional
   provideAuthenticationPolicy({ password: { minLength: 16 } })            // optional
+  provideAuthenticationClock(suiteClock)                                   // optional: the suite's one clock; the system clock without it
 })
 ```
 

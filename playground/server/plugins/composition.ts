@@ -12,6 +12,9 @@ import type { AuthenticationAccountStanding, AuthenticationEvent, Authentication
  * - AUTHENTICATION_PLAYGROUND_MFA     'required' (default) or 'optional', in test mode
  * - AUTHENTICATION_PLAYGROUND_IDENTITY=1  in test mode, a stand-in identity port
  *   that tests steer through /api/__playground/identity
+ *
+ * In test mode only, the clock can be moved forward (or made to fail) through
+ * /api/__playground/clock. A host never composes a movable clock outside tests.
  */
 
 /** The stand-in identity port's state, for tests. */
@@ -21,6 +24,12 @@ export interface PlaygroundIdentity {
   confirmed: string[]
   standings: Record<string, AuthenticationAccountStanding>
   /** When true, every call rejects, as an unreachable port would. */
+  failing: boolean
+}
+/** The test clock: real time plus an offset that only moves forward. */
+export interface PlaygroundClock {
+  offsetMs: number
+  /** When true, `now()` throws, as a failed clock service would. */
   failing: boolean
 }
 export interface PlaygroundRecorder {
@@ -34,6 +43,9 @@ const testMode = process.env.AUTHENTICATION_PLAYGROUND_TEST === '1'
 const identityMode = testMode && process.env.AUTHENTICATION_PLAYGROUND_IDENTITY === '1'
 const identity: PlaygroundIdentity = { reserved: [], confirmed: [], standings: {}, failing: false }
 ;(globalThis as { __authenticationPlaygroundIdentity?: PlaygroundIdentity }).__authenticationPlaygroundIdentity = identityMode ? identity : undefined
+
+const clock: PlaygroundClock = { offsetMs: 0, failing: false }
+;(globalThis as { __authenticationPlaygroundClock?: PlaygroundClock }).__authenticationPlaygroundClock = testMode ? clock : undefined
 
 export default defineNitroPlugin(() => {
   const connectionString = process.env.AUTHENTICATION_DATABASE_URL
@@ -81,6 +93,12 @@ export default defineNitroPlugin(() => {
   }
 
   if (testMode) {
+    provideAuthenticationClock({
+      now() {
+        if (clock.failing) throw new Error('clock unavailable')
+        return new Date(Date.now() + clock.offsetMs)
+      },
+    })
     provideAuthenticationPolicy({
       mfa: process.env.AUTHENTICATION_PLAYGROUND_MFA === 'optional' ? 'optional' : 'required',
       password: { compromisedCheck: 'disabled' },

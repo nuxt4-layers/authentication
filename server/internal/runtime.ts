@@ -8,6 +8,7 @@ import type {
   AuthenticationPolicy,
 } from '../../contracts'
 import { quoteSchema } from '../database/migrations'
+import { currentTime } from './clock'
 import { createHibpCheck, noCompromisedPasswordCheck, type CompromisedPasswordCheck } from './compromised-password'
 import { buildEngineOptions } from './engine-options'
 import type { EnabledProvider } from './federation-config'
@@ -92,7 +93,7 @@ export function validateRuntimeConfig(input: Pick<AuthenticationRuntimeInput, 's
 export function systemEvent(type: AuthenticationEvent['type'], principalId: string | null, extra: Partial<AuthenticationEvent> = {}): AuthenticationEvent {
   return {
     type,
-    occurredAt: new Date().toISOString(),
+    occurredAt: currentTime().toISOString(),
     principalId,
     sessionId: null,
     method: null,
@@ -138,6 +139,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     policy,
     hooks: {
       async sendVerificationEmail({ email, token }) {
+        // Email-link expiries are the engine's own, on the system clock.
         await send({
           kind: 'email-verification',
           to: email,
