@@ -14,6 +14,7 @@ import { breakGlassProvisioning, createBreakGlassAccounts, type BreakGlassAccoun
 import { buildEngineOptions } from './engine-options'
 import type { EnabledProvider } from './federation-config'
 import { createCredentialRecoveries, type CredentialRecoveries } from './recovery'
+import { createServiceCredentials, type ServiceCredentials } from './service-credentials'
 import { createStanding, signUpInvitation, type Standing } from './standing'
 import { accountKey, createSignInThrottle, type SignInThrottle } from './throttle'
 
@@ -60,6 +61,8 @@ export interface AuthenticationRuntime {
   standing: Standing
   /** Break-glass accounts and their enrolment tokens (ADR-0007). */
   breakGlass: BreakGlassAccounts
+  /** Service identities' machine credentials and tokens. */
+  serviceCredentials: ServiceCredentials
   policy: AuthenticationPolicy
   isCompromisedPassword: CompromisedPasswordCheck
   baseUrl: string
@@ -132,6 +135,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
   }
   const standing = createStanding({ identity: input.identity ?? (() => null), isVerified: verified })
   const breakGlass = createBreakGlassAccounts(database.pool, database.schema, input.secret)
+  const serviceCredentials = createServiceCredentials(database.pool, database.schema, input.secret)
 
   const engine = createEngine(buildEngineOptions({
     pool: database.pool,
@@ -220,6 +224,7 @@ export function createAuthenticationRuntime(input: AuthenticationRuntimeInput): 
     recoveries,
     standing,
     breakGlass,
+    serviceCredentials,
     policy,
     isCompromisedPassword: policy.password.compromisedCheck === 'hibp-range'
       ? createHibpCheck(input.fetch)

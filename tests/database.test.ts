@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto'
 import pg from 'pg'
 import { getMigrations } from 'better-auth/db/migration'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -7,6 +8,8 @@ import { createBreakGlassAccounts, enrolmentTokenDigest } from '../server/intern
 import { buildEngineOptions } from '../server/internal/engine-options'
 import { createCredentialRecoveries } from '../server/internal/recovery'
 import { createRetention } from '../server/internal/retention'
+import { parsePublicKey } from '../server/internal/client-assertion'
+import { createServiceCredentials, ServiceCredentialLimit } from '../server/internal/service-credentials'
 import { accountKey, clientKey, createSignInThrottle } from '../server/internal/throttle'
 import { createTestDatabase, hasDatabase, requireDatabaseInCi } from './support/database'
 
@@ -41,7 +44,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
       `select table_schema, table_name from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema') order by table_name`,
     )
     expect(rows.every(row => row.table_schema === 'authentication')).toBe(true)
-    expect(rows.map(row => row.table_name)).toEqual(['account', 'break_glass_account', 'break_glass_enrolment', 'credential_recovery', 'passkey', 'schema_migration', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
+    expect(rows.map(row => row.table_name)).toEqual(['account', 'break_glass_account', 'break_glass_enrolment', 'credential_recovery', 'passkey', 'schema_migration', 'service_assertion', 'service_credential', 'service_token', 'session', 'sign_in_throttle', 'totp_last_step', 'twoFactor', 'user', 'verification'])
   })
 
   it('blanks names and pictures stored by earlier releases (0003)', async () => {
@@ -212,7 +215,7 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
 
     it('deletes expired sessions and tokens past their periods, and keeps every recovery record without the hold port', async () => {
       const counts = await createRetention(pool, 'authentication').apply({ at, engineAt: at, retention, holds: null })
-      expect(counts).toEqual({ sessions: 1, credentialRecoveries: 0, enrolmentTokens: 1, verifications: 1 })
+      expect(counts).toEqual({ sessions: 1, credentialRecoveries: 0, enrolmentTokens: 1, verifications: 1, serviceTokens: 0, serviceCredentials: 0 })
       expect(await ids('"session"', '"id"')).toEqual(['session-live', 'session-recent'])
       expect(await ids('"verification"', '"id"')).toEqual(['verification-live', 'verification-recent'])
       expect(await ids('"break_glass_enrolment"', '"user_id"')).toEqual(['kept-b'])
@@ -229,13 +232,13 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
         },
       }
       const retentionRun = createRetention(pool, 'authentication')
-      expect(await retentionRun.apply({ at, engineAt: at, retention, holds })).toEqual({ sessions: 0, credentialRecoveries: 0, enrolmentTokens: 0, verifications: 0 })
+      expect(await retentionRun.apply({ at, engineAt: at, retention, holds })).toEqual({ sessions: 0, credentialRecoveries: 0, enrolmentTokens: 0, verifications: 0, serviceTokens: 0, serviceCredentials: 0 })
       expect(asked).toEqual([{ kind: 'person', id: 'kept-a' }, { kind: 'person', id: 'kept-b' }])
       expect(await ids('"credential_recovery"', '"user_id"')).toEqual(['kept-a', 'kept-b', 'kept-c'])
 
       // The hold on kept-a ends and the port answers again: both go; kept-c is still within its period.
       expect(await retentionRun.apply({ at, engineAt: at, retention, holds: { covers: async () => false } }))
-        .toEqual({ sessions: 0, credentialRecoveries: 2, enrolmentTokens: 0, verifications: 0 })
+        .toEqual({ sessions: 0, credentialRecoveries: 2, enrolmentTokens: 0, verifications: 0, serviceTokens: 0, serviceCredentials: 0 })
       expect(await ids('"credential_recovery"', '"user_id"')).toEqual(['kept-c'])
     })
 
@@ -258,6 +261,102 @@ describe.skipIf(!hasDatabase)('authentication database', () => {
       }
       expect((await createRetention(pool, 'authentication').apply({ at, engineAt: at, retention, holds })).credentialRecoveries).toBe(0)
       expect(await recoveries.get('kept-a')).toMatchObject({ recoveredAt: at.toISOString() })
+    })
+  })
+
+  describe('service credentials', () => {
+    const secret = 'service-test-secret-that-is-long-enough-0123456789'
+    const at = new Date('2027-01-01T00:00:00Z')
+    const later = (days: number) => new Date(at.getTime() + days * 86_400_000)
+    const store = () => createServiceCredentials(pool, 'authentication', secret)
+    const publicKey = () => parsePublicKey(generateKeyPairSync('ed25519').publicKey.export({ format: 'jwk' }))!
+
+    it('stores a secret only as its keyed digest, and authenticates it for its own identity only', async () => {
+      const issued = await store().issueSecret('service-a', at, later(90))
+      expect(issued.clientSecret).toMatch(/^[A-Za-z0-9_-]{43}$/)
+      expect(issued.credential).toMatchObject({ identityId: 'service-a', kind: 'secret', keyThumbprint: null, lastUsedAt: null, expiresAt: later(90).toISOString() })
+      const { rows } = await pool.query(`select * from "authentication"."service_credential" where "credential_id" = $1`, [issued.credential.credentialId])
+      expect(JSON.stringify(rows)).not.toContain(issued.clientSecret)
+      expect(rows[0].secret_digest).toMatch(/^[0-9a-f]{64}$/)
+      expect((await store().authenticateSecret('service-a', issued.clientSecret!, at))?.credentialId).toBe(issued.credential.credentialId)
+      expect(await store().authenticateSecret('service-b', issued.clientSecret!, at)).toBeNull()
+      expect(await store().authenticateSecret('service-a', 'B'.repeat(43), at)).toBeNull()
+      expect(await store().authenticateSecret('service-a', issued.clientSecret!, later(91))).toBeNull()
+    })
+
+    it('keeps at most two active credentials, counted under a lock, and the same key once', async () => {
+      const key = publicKey()
+      const results = await Promise.allSettled([
+        store().registerKey('service-c', key, at, later(90)),
+        store().issueSecret('service-c', at, later(90)),
+        store().issueSecret('service-c', at, later(90)),
+      ])
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(2)
+      expect(results.filter(result => result.status === 'rejected').map(result => (result as PromiseRejectedResult).reason)).toEqual([expect.any(ServiceCredentialLimit)])
+      const active = await store().list('service-c', at)
+      expect(active).toHaveLength(2)
+      const first = active[0]!
+      expect(await store().revoke('service-c', first.credentialId, at)).toMatchObject({ credentialId: first.credentialId })
+      expect(await store().revoke('service-c', first.credentialId, at)).toBeNull()
+      expect(await store().revoke('service-other', active[1]!.credentialId, at)).toBeNull()
+      // A credential past its expiry no longer counts.
+      expect((await store().list('service-c', later(91)))).toHaveLength(0)
+      const second = await store().registerKey('service-d', key, at, later(90))
+      expect(second.clientSecret).toBeNull()
+      await expect(store().registerKey('service-d', key, at, later(90))).rejects.toBeInstanceOf(ServiceCredentialLimit)
+    })
+
+    it('issues tokens stored as digests that end with their credential, and lets each assertion be used once', async () => {
+      const credentials = store()
+      const issued = await credentials.issueSecret('service-e', at, later(90))
+      const token = await credentials.issueToken(issued.credential, 'client-secret', at, new Date(at.getTime() + 900_000))
+      expect(JSON.stringify((await pool.query(`select * from "authentication"."service_token"`)).rows)).not.toContain(token.token)
+      expect(await credentials.resolveToken(token.token, at)).toMatchObject({ tokenId: token.tokenId, identityId: 'service-e', method: 'client-secret' })
+      expect(await credentials.resolveToken(token.token, new Date(at.getTime() + 900_000))).toBeNull()
+      expect((await credentials.list('service-e', at))[0]!.lastUsedAt).toBe(at.toISOString())
+
+      expect(await credentials.endTokens('service-e')).toBe(1)
+      expect(await credentials.resolveToken(token.token, at)).toBeNull()
+      const again = await credentials.issueToken(issued.credential, 'client-secret', at, new Date(at.getTime() + 900_000))
+      await credentials.revoke('service-e', issued.credential.credentialId, at)
+      expect(await credentials.resolveToken(again.token, at)).toBeNull()
+
+      expect(await credentials.rememberAssertion('service-e', 'jti-0123456789abcdef', later(1), at)).toBe(true)
+      expect(await credentials.rememberAssertion('service-e', 'jti-0123456789abcdef', later(1), at)).toBe(false)
+      expect(await credentials.rememberAssertion('service-f', 'jti-0123456789abcdef', later(1), at)).toBe(true)
+    })
+
+    it('warns once before expiry, ends expired credentials with their tokens, and forgets a closed identity', async () => {
+      const credentials = store()
+      const soon = await credentials.issueSecret('service-g', at, later(10))
+      await credentials.issueSecret('service-g', at, later(90))
+      expect((await credentials.warnExpiring(at, 14)).map(found => found.credentialId)).toEqual([soon.credential.credentialId])
+      expect(await credentials.warnExpiring(at, 14)).toEqual([])
+      const token = await credentials.issueToken(soon.credential, 'client-secret', at, later(11))
+      expect((await credentials.expireDue(later(10))).map(found => found.credentialId)).toContain(soon.credential.credentialId)
+      expect(await credentials.expireDue(later(10))).toEqual([])
+      expect((await pool.query(`select 1 from "authentication"."service_token" where "token_id" = $1`, [token.tokenId])).rows).toHaveLength(0)
+
+      const ended = await credentials.forget('service-g', later(10))
+      expect(ended.map(found => found.identityId)).toEqual(['service-g'])
+      expect((await pool.query(`select 1 from "authentication"."service_credential" where "identity_id" = 'service-g'`)).rows).toHaveLength(0)
+      expect(await credentials.forget('service-g', later(10))).toEqual([])
+    })
+
+    it('deletes expired tokens and ended credentials past the token period', async () => {
+      const credentials = store()
+      const issued = await credentials.issueSecret('service-h', at, later(90))
+      await credentials.issueToken(issued.credential, 'client-secret', at, new Date(at.getTime() + 900_000))
+      await credentials.revoke('service-h', issued.credential.credentialId, at)
+      const kept = await credentials.issueSecret('service-h', at, later(90))
+      await credentials.issueToken(kept.credential, 'client-secret', at, new Date(at.getTime() + 900_000))
+      const retention = resolveAuthenticationPolicy().retention
+      const counts = await createRetention(pool, 'authentication').apply({ at: later(31), engineAt: at, retention, holds: null })
+      expect(counts).toMatchObject({ serviceCredentials: expect.any(Number), serviceTokens: expect.any(Number) })
+      expect(counts.serviceCredentials).toBeGreaterThanOrEqual(1)
+      expect(counts.serviceTokens).toBeGreaterThanOrEqual(1)
+      expect((await pool.query(`select "credential_id" from "authentication"."service_credential" where "identity_id" = 'service-h'`)).rows)
+        .toEqual([{ credential_id: kept.credential.credentialId }])
     })
   })
 

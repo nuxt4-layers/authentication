@@ -138,6 +138,8 @@ export const AUTHENTICATION_MESSAGES_EN_GB = {
   'authentication.error.session-expired': 'Your session has ended. Sign in again.',
   'authentication.error.rate-limited': 'Too many attempts. Wait a few minutes and try again.',
   'authentication.error.origin-rejected': 'The request was blocked for your security. Reload the page and try again.',
+  'authentication.error.forbidden': 'You cannot do that.',
+  'authentication.error.credential-limit-reached': 'This service already has two active credentials. Revoke one before adding another.',
   'authentication.error.validation-failed': 'Check the details you entered and try again.',
   'authentication.error.unavailable': 'The service is unavailable right now. Try again shortly.',
 } as const

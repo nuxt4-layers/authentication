@@ -1,4 +1,5 @@
 import type { AuthenticationMethod } from './principal'
+import type { AuthenticationServiceCredentialEnding, AuthenticationServiceCredentialKind } from './service-credentials'
 
 /**
  * Facts emitted after security-relevant authentication events, for audit and
@@ -31,6 +32,10 @@ export const AUTHENTICATION_EVENT_TYPES = [
   'authentication.break-glass-enrolled',
   'authentication.break-glass-rotated',
   'authentication.retention-applied',
+  'authentication.service-credential-issued',
+  'authentication.service-credential-revoked',
+  'authentication.service-credential-expiring',
+  'authentication.service-token-issued',
 ] as const
 
 export type AuthenticationEventType = typeof AUTHENTICATION_EVENT_TYPES[number]
@@ -58,6 +63,22 @@ export interface AuthenticationEvent {
   client: AuthenticationEventClient | null
   /** `authentication.retention-applied` only: how many records of each kind the run deleted. */
   counts?: AuthenticationRetentionCounts
+  /**
+   * Service-credential events only: which credential (never its secret or
+   * key), its kind and expiry, and why it ended. `principalId` is the
+   * service identity.
+   */
+  credential?: AuthenticationEventCredential
+  /** A service credential issued or revoked by a person: that person's principal identifier. */
+  actorId?: string
+}
+
+export interface AuthenticationEventCredential {
+  credentialId: string
+  kind: AuthenticationServiceCredentialKind
+  expiresAt: string
+  /** `authentication.service-credential-revoked` only. */
+  endedHow?: AuthenticationServiceCredentialEnding
 }
 
 /** Records deleted by one maintenance run, by kind. Counts only, never identifiers. */
@@ -66,4 +87,8 @@ export interface AuthenticationRetentionCounts {
   credentialRecoveries: number
   enrolmentTokens: number
   verifications: number
+  /** Service tokens expired more than `retention.tokenDays` ago. */
+  serviceTokens: number
+  /** Service credentials revoked or expired more than `retention.tokenDays` ago. */
+  serviceCredentials: number
 }

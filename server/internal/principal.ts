@@ -52,6 +52,7 @@ export function toPrincipal(session: EngineSessionRecord, absoluteLifetimeSecond
   const methods = parseMethods(session.authenticationMethods)
   return {
     principalId: session.userId,
+    kind: 'person',
     sessionId: session.id,
     authenticatedAt: toDate(session.authenticatedAt ?? session.createdAt).toISOString(),
     expiresAt: absoluteExpiry(session, absoluteLifetimeSeconds).toISOString(),

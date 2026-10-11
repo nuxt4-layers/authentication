@@ -65,6 +65,50 @@ create table {{schema}}."break_glass_account" ("user_id" text not null primary k
 create table {{schema}}."break_glass_enrolment" ("user_id" text not null primary key references {{schema}}."break_glass_account" ("user_id") on delete cascade, "token_digest" text not null unique check ("token_digest" ~ '^[0-9a-f]{64}$'), "expires_at" timestamptz not null, "challenge" text);
 `,
   },
+  {
+    // Service identities' machine credentials (iam-integration's service
+    // identities): client secrets stored only as keyed digests, public keys
+    // for signed assertions, the assertions' identifiers against replay, and
+    // short-lived opaque tokens stored only as digests. A service identity is
+    // Identity's; it has no engine user.
+    id: '0006_service_credentials',
+    sql: `
+create table {{schema}}."service_credential" (
+  "credential_id" uuid not null primary key,
+  "identity_id" text not null,
+  "kind" text not null check ("kind" in ('secret', 'public-key')),
+  "secret_digest" text unique check ("secret_digest" ~ '^[0-9a-f]{64}$'),
+  "public_key" jsonb,
+  "key_thumbprint" text check ("key_thumbprint" ~ '^[A-Za-z0-9_-]{43}$'),
+  "created_at" timestamptz not null,
+  "expires_at" timestamptz not null,
+  "last_used_at" timestamptz,
+  "warned_at" timestamptz,
+  "ended_at" timestamptz,
+  "ended_how" text check ("ended_how" in ('revoked', 'expired', 'identity-closed')),
+  check (("kind" = 'secret') = ("secret_digest" is not null)),
+  check (("kind" = 'public-key') = ("public_key" is not null and "key_thumbprint" is not null)),
+  check (("ended_at" is null) = ("ended_how" is null))
+);
+create index "service_credential_identity_idx" on {{schema}}."service_credential" ("identity_id") where "ended_at" is null;
+create table {{schema}}."service_token" (
+  "token_digest" text not null primary key check ("token_digest" ~ '^[0-9a-f]{64}$'),
+  "token_id" uuid not null unique,
+  "identity_id" text not null,
+  "credential_id" uuid not null references {{schema}}."service_credential" ("credential_id") on delete cascade,
+  "method" text not null check ("method" in ('client-secret', 'client-assertion')),
+  "issued_at" timestamptz not null,
+  "expires_at" timestamptz not null
+);
+create index "service_token_identity_idx" on {{schema}}."service_token" ("identity_id");
+create table {{schema}}."service_assertion" (
+  "identity_id" text not null,
+  "jti" text not null,
+  "expires_at" timestamptz not null,
+  primary key ("identity_id", "jti")
+);
+`,
+  },
 ]
 
 const SCHEMA_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/

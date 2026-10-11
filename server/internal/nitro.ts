@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { getRequestHeader, getRequestURL } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import type { AuthenticatedPrincipal, AuthenticationDatabase } from '../../contracts'
 import { runAuthenticationMigrations } from '../database/migrations'
@@ -9,6 +10,7 @@ import {
   useAuthenticationMailer,
   useAuthenticationPolicy,
 } from '../utils/authentication-composition'
+import { currentTime } from './clock'
 import { authenticationError, forwardCookies, requestHeaders } from './http'
 import { absoluteExpiry, toPrincipal, type EngineSessionRecord } from './principal'
 import { enabledProviders } from './federation-config'
@@ -63,13 +65,68 @@ const CONTEXT_KEY = 'authenticationPrincipal'
 const TOKEN_KEY = 'authenticationSessionToken'
 
 /**
- * Resolves the current principal once per request. Enforces the absolute
- * session lifetime by signing out sessions past it.
+ * Outside the layer's own endpoints (a person's session, credentials and
+ * pages, which never accept a service token): the bearer token presented, an
+ * empty string for a malformed one, or null when there is none.
+ */
+function bearerToken(event: H3Event): string | null {
+  if (getRequestURL(event).pathname.startsWith('/api/authentication/')) return null
+  const header = getRequestHeader(event, 'authorization')
+  if (!header || !/^Bearer\s/i.test(header)) return null
+  return /^Bearer ([A-Za-z0-9_-]{1,200})$/.exec(header)?.[1] ?? ''
+}
+
+/**
+ * The service principal a bearer token stands for, read with the identity's
+ * standing on every request: a suspended or closed service identity is
+ * refused at once, and its tokens ended. Null for anything else.
+ */
+async function servicePrincipal(runtime: AuthenticationRuntime, token: string): Promise<AuthenticatedPrincipal | null> {
+  const resolved = await runtime.serviceCredentials.resolveToken(token, currentTime())
+  if (!resolved) return null
+  // Without an identity port nothing stands behind a service identity.
+  if (!runtime.standing.enabled) return null
+  let standing
+  try {
+    standing = await runtime.standing.of(resolved.identityId)
+  }
+  catch (error) {
+    if (error instanceof IdentityPortFailure) throw authenticationError('unavailable')
+    throw error
+  }
+  if (standing.standing !== 'allowed') {
+    await runtime.serviceCredentials.endTokens(resolved.identityId)
+    return null
+  }
+  return {
+    principalId: resolved.identityId,
+    kind: 'service',
+    sessionId: resolved.tokenId,
+    authenticatedAt: resolved.issuedAt.toISOString(),
+    expiresAt: resolved.expiresAt.toISOString(),
+    // A service token is a second factor's equal, never phishing-resistant: never enough for `critical`.
+    assurance: { level: 'aal2', methods: [resolved.method], phishingResistant: false },
+    standing: 'allowed',
+  }
+}
+
+/**
+ * Resolves the current principal once per request: a service identity's
+ * bearer token when one is presented (never falling back to a cookie), or
+ * else the session. Enforces the absolute session lifetime by signing out
+ * sessions past it.
  */
 export async function resolvePrincipal(event: H3Event): Promise<AuthenticatedPrincipal | null> {
   if (CONTEXT_KEY in event.context) return event.context[CONTEXT_KEY] as AuthenticatedPrincipal | null
 
   const runtime = await useAuthenticationRuntime()
+  // A bearer token is a service's: it never falls back to a session cookie.
+  const bearer = bearerToken(event)
+  if (bearer !== null) {
+    const principal = bearer === '' ? null : await servicePrincipal(runtime, bearer)
+    event.context[CONTEXT_KEY] = principal
+    return principal
+  }
   const headers = requestHeaders(event)
   const result = await runtime.engine.api.getSession({ headers, returnHeaders: true })
   forwardCookies(event, result.headers)
