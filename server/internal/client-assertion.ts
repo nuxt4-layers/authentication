@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, verify } from 'node:crypto'
-import type { JsonWebKey } from 'node:crypto'
+import type { JsonWebKeyInput } from 'node:crypto'
 
 /**
  * PRIVATE. Signed client assertions (`private_key_jwt`, RFC 7523 §3; OpenID
@@ -18,6 +18,9 @@ export type ServicePublicKey =
   | { kty: 'OKP', crv: 'Ed25519', x: string }
 
 const B64URL = /^[A-Za-z0-9_-]+$/
+
+/** Node's JWK type, named the way every supported `@types/node` exports it. */
+type JsonWebKey = JsonWebKeyInput['key']
 
 /** Every member a JWK may carry that would make it a private key. */
 const PRIVATE_MEMBERS = ['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth', 'k']
