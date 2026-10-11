@@ -15,7 +15,7 @@ Nuxt 4 **foundation** capability that establishes **who has signed in** and mana
 
 It is designed to be composed into a host application as a black box: the host supplies infrastructure through documented ports, and everything else stays private to the layer.
 
-> **Status: 0.6.0, phase 6 (host integration) in progress.** Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); and accessible, localisable default pages styled through Theme Manager's semantic vocabulary all work end to end on PostgreSQL. **MFA is required by default.** See [docs/roadmap.md](docs/roadmap.md).
+> **Status: 1.0.0.** Contract version 1 is frozen for 1.x; see [CHANGELOG.md](CHANGELOG.md) and the [roadmap](docs/roadmap.md). Email and password, verification, reset, sessions, lockout and throttling; TOTP with backup codes, passkeys (including passwordless sign-in) and step-up re-authentication; sign-in with Google, Microsoft, GitHub, Facebook or any OIDC provider (linked only explicitly, by provider subject); break-glass accounts; service identities' client credentials; retention; and accessible, localisable default pages styled through Theme Manager's semantic vocabulary, all on PostgreSQL. **MFA is required by default.**
 
 ## Bounded responsibility
 
