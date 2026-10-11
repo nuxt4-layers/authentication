@@ -21,6 +21,16 @@ export const AUTHENTICATION_RETENTION_BOUNDS = Object.freeze({
 
 const RETENTION_KINDS = ['sessionDays', 'recoveryDays', 'tokenDays'] as const
 
+/**
+ * Service credentials (iam-integration's service identities): default and
+ * bounds. Longer than the default needs `serviceCredentials.riskTreatment`,
+ * since a longer-lived secret or token gives a leaked one longer to be used.
+ */
+export const AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS = Object.freeze({
+  credentialDays: Object.freeze({ default: 90, min: 1, max: 365 }),
+  tokenMinutes: Object.freeze({ default: 15, min: 5, max: 60 }),
+} as const)
+
 const policySchema = z.object({
   password: z.object({
     /** NIST SP 800-63-4: at least 15 when the password is the only factor; never fewer than 8. */
@@ -94,6 +104,16 @@ const policySchema = z.object({
     /** Reference to the host's documented risk treatment for a shorter period, or null. */
     riskTreatment: z.string().min(1).max(200).nullable(),
   }).strict(),
+
+  /** Service identities' machine credentials, within `AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS`. */
+  serviceCredentials: z.object({
+    /** Days a client secret or registered key stays valid. */
+    credentialDays: z.int().min(AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.credentialDays.min).max(AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.credentialDays.max),
+    /** Minutes a service token stays valid. */
+    tokenMinutes: z.int().min(AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.tokenMinutes.min).max(AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.tokenMinutes.max),
+    /** Reference to the host's documented risk treatment for a longer period, or null. */
+    riskTreatment: z.string().min(1).max(200).nullable(),
+  }).strict(),
 }).strict().refine(
   policy => policy.session.idleTimeoutSeconds <= policy.session.absoluteLifetimeSeconds,
   { message: 'session.idleTimeoutSeconds must not exceed session.absoluteLifetimeSeconds', path: ['session'] },
@@ -101,6 +121,11 @@ const policySchema = z.object({
   policy => policy.retention.riskTreatment !== null
     || RETENTION_KINDS.every(kind => policy.retention[kind] >= AUTHENTICATION_RETENTION_BOUNDS[kind].default),
   { message: 'a retention period below its default needs retention.riskTreatment', path: ['retention'] },
+).refine(
+  policy => policy.serviceCredentials.riskTreatment !== null
+    || (policy.serviceCredentials.credentialDays <= AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.credentialDays.default
+      && policy.serviceCredentials.tokenMinutes <= AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.tokenMinutes.default),
+  { message: 'a service credential or token longer than its default needs serviceCredentials.riskTreatment', path: ['serviceCredentials'] },
 )
 
 export type AuthenticationPolicy = z.infer<typeof policySchema>
@@ -127,6 +152,11 @@ export const DEFAULT_AUTHENTICATION_POLICY: Readonly<AuthenticationPolicy> = Obj
     tokenDays: AUTHENTICATION_RETENTION_BOUNDS.tokenDays.default,
     riskTreatment: null,
   }),
+  serviceCredentials: Object.freeze({
+    credentialDays: AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.credentialDays.default,
+    tokenMinutes: AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS.tokenMinutes.default,
+    riskTreatment: null,
+  }),
 })
 
 /**
@@ -145,6 +175,7 @@ export function resolveAuthenticationPolicy(input: AuthenticationPolicyInput = {
     emailVerification: input.emailVerification ?? defaults.emailVerification,
     breakGlass: { ...defaults.breakGlass, ...input.breakGlass },
     retention: { ...defaults.retention, ...input.retention },
+    serviceCredentials: { ...defaults.serviceCredentials, ...input.serviceCredentials },
   })
 }
 

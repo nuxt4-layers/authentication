@@ -14,6 +14,9 @@ import type { AuthenticationStanding } from './identity'
  * - `federated` — external identity provider sign-in.
  * - `remembered-device` — the second factor was skipped on a device the user
  *   chose to remember (only when the host enables `rememberedDevice.days`).
+ * - `client-secret` — a service identity's client secret, at the token endpoint.
+ * - `client-assertion` — a service identity's assertion signed with a
+ *   registered key (`private_key_jwt`), at the token endpoint.
  */
 export type AuthenticationMethod =
   | 'password'
@@ -22,6 +25,17 @@ export type AuthenticationMethod =
   | 'passkey'
   | 'federated'
   | 'remembered-device'
+  | 'client-secret'
+  | 'client-assertion'
+
+/**
+ * Whose principal this is.
+ * - `person` — signed in with a session (cookie).
+ * - `service` — a service identity with a bearer token from the token
+ *   endpoint: `aal2`, never phishing-resistant, so never enough for a
+ *   `critical` operation.
+ */
+export type AuthenticationPrincipalKind = 'person' | 'service'
 
 /**
  * Authentication assurance level, aligned with NIST SP 800-63-4 terminology.
@@ -49,7 +63,9 @@ export interface AuthenticationAssurance {
 export interface AuthenticatedPrincipal {
   /** Stable, opaque principal identifier. Other capabilities store this value. */
   principalId: string
-  /** Opaque identifier of the current session. */
+  /** A person with a session, or a service identity with a bearer token. */
+  kind: AuthenticationPrincipalKind
+  /** Opaque identifier of the current session, or of a service's token. */
   sessionId: string
   /** ISO 8601 timestamp of the most recent primary or step-up authentication. */
   authenticatedAt: string

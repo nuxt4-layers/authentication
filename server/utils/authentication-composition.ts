@@ -8,6 +8,7 @@ import type {
   AuthenticationMailer,
   AuthenticationPolicy,
   AuthenticationPolicyInput,
+  AuthenticationServiceGovernance,
 } from '../../contracts'
 import { AuthenticationCompositionError, resolveAuthenticationPolicy } from '../../contracts'
 
@@ -26,6 +27,7 @@ let policy: AuthenticationPolicy | null = null
 let identity: AuthenticationIdentity | null = null
 let clock: AuthenticationClock | null = null
 let legalHolds: AuthenticationLegalHolds | null = null
+let serviceGovernance: AuthenticationServiceGovernance | null = null
 
 const SYSTEM_CLOCK: AuthenticationClock = Object.freeze({ now: () => new Date() })
 
@@ -108,6 +110,25 @@ export function useAuthenticationLegalHolds(): AuthenticationLegalHolds | null {
   return legalHolds
 }
 
+/**
+ * Optional service-governance port (normally iam-integration's
+ * `authenticationServiceGovernanceFromIdentity`): whether a person may manage
+ * a service identity's credentials. Without it, every credential request is
+ * refused (`forbidden`); the token endpoint works for credentials already
+ * issued, and needs the identity port for each service identity's standing.
+ */
+export function provideAuthenticationServiceGovernance(next: AuthenticationServiceGovernance): void {
+  if (typeof next?.mayManage !== 'function') {
+    throw new TypeError('provideAuthenticationServiceGovernance expects an object with a mayManage(input) function.')
+  }
+  serviceGovernance = next
+}
+
+/** The service-governance port, or null when the host supplies none. */
+export function useAuthenticationServiceGovernance(): AuthenticationServiceGovernance | null {
+  return serviceGovernance
+}
+
 /** Validates and stores the host's policy overrides. Invalid policy throws at startup. */
 export function provideAuthenticationPolicy(input: AuthenticationPolicyInput): void {
   policy = resolveAuthenticationPolicy(input)
@@ -152,4 +173,5 @@ export function clearAuthenticationComposition(): void {
   identity = null
   clock = null
   legalHolds = null
+  serviceGovernance = null
 }

@@ -19,6 +19,7 @@ export type {
   AuthenticationAssurance,
   AuthenticationAssuranceLevel,
   AuthenticationMethod,
+  AuthenticationPrincipalKind,
   AuthenticationRequirement,
   AuthenticationSessionSummary,
 } from '../shared/principal'
@@ -43,6 +44,7 @@ export {
 export type {
   AuthenticationEvent,
   AuthenticationEventClient,
+  AuthenticationEventCredential,
   AuthenticationEventType,
   AuthenticationRetentionCounts,
 } from '../shared/events'
@@ -58,6 +60,26 @@ export type {
   AuthenticationRecoveryMethod,
 } from '../shared/recovery'
 export { AUTHENTICATION_RECOVERY_METHODS } from '../shared/recovery'
+
+// ---------------------------------------------------------------------------
+// Service credentials (iam-integration's service identities)
+// ---------------------------------------------------------------------------
+
+export type {
+  AuthenticationIssuedServiceCredential,
+  AuthenticationServiceCredential,
+  AuthenticationServiceCredentialEnding,
+  AuthenticationServiceCredentialKind,
+  AuthenticationServiceTokenError,
+  AuthenticationServiceTokenResponse,
+} from '../shared/service-credentials'
+export {
+  AUTHENTICATION_SERVICE_CREDENTIAL_ENDINGS,
+  AUTHENTICATION_SERVICE_CREDENTIAL_KINDS,
+  AUTHENTICATION_SERVICE_CREDENTIAL_WARNING_DAYS,
+  AUTHENTICATION_SERVICE_CREDENTIALS_ACTIVE_MAX,
+  AUTHENTICATION_SERVICE_TOKEN_ERRORS,
+} from '../shared/service-credentials'
 
 // ---------------------------------------------------------------------------
 // Break-glass accounts (ADR-0007)
@@ -82,6 +104,7 @@ export type {
 } from '../shared/policy'
 export {
   AUTHENTICATION_RETENTION_BOUNDS,
+  AUTHENTICATION_SERVICE_CREDENTIAL_BOUNDS,
   DEFAULT_AUTHENTICATION_POLICY,
   publicAuthenticationPolicy,
   resolveAuthenticationPolicy,
@@ -105,6 +128,7 @@ export type {
   AuthenticationMailer,
   AuthenticationMessage,
   AuthenticationMessageKind,
+  AuthenticationServiceGovernance,
   PostgresPoolLike,
 } from '../shared/ports'
 export { AUTHENTICATION_MESSAGE_KINDS } from '../shared/ports'

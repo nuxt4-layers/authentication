@@ -1,4 +1,5 @@
 import type { AuthenticationEvent } from './events'
+import type { AuthenticatedPrincipal } from './principal'
 
 /**
  * Structural shape of a PostgreSQL connection pool, as provided by the `pg`
@@ -87,4 +88,16 @@ export interface AuthenticationClock {
  */
 export interface AuthenticationLegalHolds {
   covers(subject: { kind: 'person', id: string }): Promise<boolean>
+}
+
+/**
+ * Optional service-governance port (iam-integration's
+ * `authenticationServiceGovernanceFromIdentity`): whether the signed-in
+ * person may issue, list or revoke a service identity's credentials now.
+ * Identity answers: true only for an active service identity whose owning
+ * group's `identity.service-identities:manage` the person holds. Without the
+ * port, or when it rejects, every credential request is refused.
+ */
+export interface AuthenticationServiceGovernance {
+  mayManage(input: { principal: AuthenticatedPrincipal, serviceIdentityId: string }): Promise<boolean>
 }

@@ -11,11 +11,13 @@ import {
   provideAuthenticationLegalHolds,
   provideAuthenticationMailer,
   provideAuthenticationPolicy,
+  provideAuthenticationServiceGovernance,
   useAuthenticationClock,
   useAuthenticationDatabase,
   useAuthenticationLegalHolds,
   useAuthenticationMailer,
   useAuthenticationPolicy,
+  useAuthenticationServiceGovernance,
 } from '../server/utils/authentication-composition'
 
 const pool = { query: vi.fn(), connect: vi.fn(), end: vi.fn() }
@@ -100,6 +102,16 @@ describe('Authentication composition ports', () => {
     const holds = { covers: async () => false }
     provideAuthenticationLegalHolds(holds)
     expect(useAuthenticationLegalHolds()).toBe(holds)
+  })
+
+  it('has no service-governance port unless the host supplies one, and rejects one without mayManage()', () => {
+    expect(useAuthenticationServiceGovernance()).toBeNull()
+    expect(() => provideAuthenticationServiceGovernance({} as never)).toThrow(TypeError)
+    const governance = { mayManage: async () => false }
+    provideAuthenticationServiceGovernance(governance)
+    expect(useAuthenticationServiceGovernance()).toBe(governance)
+    clearAuthenticationComposition()
+    expect(useAuthenticationServiceGovernance()).toBeNull()
   })
 
   it('uses the system clock when the host supplies none', () => {

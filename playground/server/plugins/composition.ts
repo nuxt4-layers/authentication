@@ -11,7 +11,7 @@ import type { AuthenticationAccountStanding, AuthenticationEvent, Authentication
  * - AUTHENTICATION_PLAYGROUND_TEST=1  in-memory mailbox/event log for tests; no HIBP calls
  * - AUTHENTICATION_PLAYGROUND_MFA     'required' (default) or 'optional', in test mode
  * - AUTHENTICATION_PLAYGROUND_IDENTITY=1  in test mode, a stand-in identity port
- *   that tests steer through /api/__playground/identity
+ *   and service-governance port that tests steer through /api/__playground/identity
  *
  * In test mode only, the clock can be moved forward (or made to fail) through
  * /api/__playground/clock. A host never composes a movable clock outside tests.
@@ -23,6 +23,8 @@ export interface PlaygroundIdentity {
   reserved: { principalId: string, invitationToken: string | null }[]
   confirmed: string[]
   standings: Record<string, AuthenticationAccountStanding>
+  /** Service identities, each with the people who may manage its credentials. */
+  managers: Record<string, string[]>
   /** When true, every call rejects, as an unreachable port would. */
   failing: boolean
 }
@@ -41,7 +43,7 @@ const recorder: PlaygroundRecorder = { messages: [], events: [] }
 const testMode = process.env.AUTHENTICATION_PLAYGROUND_TEST === '1'
 ;(globalThis as { __authenticationPlayground?: PlaygroundRecorder }).__authenticationPlayground = testMode ? recorder : undefined
 const identityMode = testMode && process.env.AUTHENTICATION_PLAYGROUND_IDENTITY === '1'
-const identity: PlaygroundIdentity = { reserved: [], confirmed: [], standings: {}, failing: false }
+const identity: PlaygroundIdentity = { reserved: [], confirmed: [], standings: {}, managers: {}, failing: false }
 ;(globalThis as { __authenticationPlaygroundIdentity?: PlaygroundIdentity }).__authenticationPlaygroundIdentity = identityMode ? identity : undefined
 
 const clock: PlaygroundClock = { offsetMs: 0, failing: false }
@@ -88,6 +90,14 @@ export default defineNitroPlugin(() => {
       async standing(principalId) {
         available()
         return identity.standings[principalId] ?? null
+      },
+    })
+    // As Identity answers through iam-integration's adapter: an active service identity, and a person who may manage it.
+    provideAuthenticationServiceGovernance({
+      async mayManage({ principal, serviceIdentityId }) {
+        available()
+        return identity.standings[serviceIdentityId]?.standing === 'allowed'
+          && (identity.managers[serviceIdentityId] ?? []).includes(principal.principalId)
       },
     })
   }

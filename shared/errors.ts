@@ -20,6 +20,8 @@ export const AUTHENTICATION_ERROR_CODES = [
   'rate-limited',
   'origin-rejected',
   'validation-failed',
+  'forbidden',
+  'credential-limit-reached',
   'unavailable',
 ] as const
 
@@ -41,6 +43,8 @@ export const AUTHENTICATION_ERROR_STATUS: Readonly<Record<AuthenticationErrorCod
   'rate-limited': 429,
   'origin-rejected': 403,
   'validation-failed': 400,
+  'forbidden': 403,
+  'credential-limit-reached': 409,
   'unavailable': 503,
 }
 

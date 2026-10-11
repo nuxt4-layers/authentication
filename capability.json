@@ -48,6 +48,14 @@
     {
       "port": "AuthenticationClock",
       "optional": true
+    },
+    {
+      "port": "AuthenticationLegalHolds",
+      "optional": true
+    },
+    {
+      "port": "AuthenticationServiceGovernance",
+      "optional": true
     }
   ],
   "integration": {

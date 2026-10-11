@@ -92,6 +92,7 @@ describe('principal and assurance', () => {
     const principal = toPrincipal(session, 86_400)
     expect(principal).toEqual({
       principalId: 'u1',
+      kind: 'person',
       sessionId: 's1',
       authenticatedAt: '2026-10-03T10:00:00.000Z',
       expiresAt: '2026-10-03T11:30:00.000Z',

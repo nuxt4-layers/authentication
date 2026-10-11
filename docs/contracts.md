@@ -22,7 +22,8 @@ The single fact authentication publishes:
 | Field | Meaning |
 |---|---|
 | `principalId` | Stable, opaque identifier. Other capabilities store this value and never a credential or email address. |
-| `sessionId` | Opaque identifier of the current session. |
+| `kind` | `person` for a session, `service` for a service identity's bearer token (§14). |
+| `sessionId` | Opaque identifier of the current session, or of a service token. |
 | `authenticatedAt` | Time of the most recent primary or step-up authentication. |
 | `expiresAt` | Time after which the session is no longer valid. |
 | `assurance` | `{ level: 'aal1' \| 'aal2', methods, phishingResistant }` |
@@ -40,6 +41,7 @@ How `assurance` is derived:
 | `password` + `remembered-device` (only if the host enables `rememberedDevice.days`) | `aal2` | no |
 | `federated` (identity provider) | `aal1` | no |
 | `federated` + `totp`, `backup-code` or `passkey` | `aal2` | no, or yes with a passkey |
+| `client-secret` or `client-assertion` (a service token, §14) | `aal2` | no |
 
 A provider's own MFA is not trusted. Provider sign-ins step up with a local factor.
 
@@ -74,13 +76,15 @@ The codes are in `AUTHENTICATION_ERROR_CODES`, and their HTTP statuses are in `A
 
 Enumeration resistance is part of the contract. `invalid-credentials` covers unknown accounts, wrong passwords and disabled or locked accounts alike, including an account the identity port refuses or a break-glass account signing in without a passkey. No code reveals whether an account exists.
 
+`forbidden` (403) refuses a service-credential request the service-governance port does not allow, whether or not the service identity exists; `credential-limit-reached` (409) refuses a third active credential (§14). The service token endpoint answers OAuth errors instead (§14).
+
 `AuthenticationCompositionError` is a deployment fault raised when a required port is missing. It is never a user-facing response.
 
 ## 4. Event contract
 
 `AuthenticationEvent` values are emitted after security-relevant facts (`AUTHENTICATION_EVENT_TYPES`, all namespaced `authentication.*`).
 
-Phase 3 adds `authentication.backup-code-used`. Phase 6 adds `authentication.break-glass-provisioned`, `authentication.break-glass-enrolled` (with `method: 'passkey'`) and `authentication.break-glass-rotated` (§12); they carry the principal, never the enrolment token or the address. Phase 7 adds `authentication.retention-applied` (§13), with no principal and with `counts` (`AuthenticationRetentionCounts`), the only event that carries it. Sign-in failures carry a machine-readable `reason`, such as `invalid-credentials`, `account-locked`, `rate-limited`, `totp-replayed` or `user-not-verified`.
+Phase 3 adds `authentication.backup-code-used`. Phase 6 adds `authentication.break-glass-provisioned`, `authentication.break-glass-enrolled` (with `method: 'passkey'`) and `authentication.break-glass-rotated` (§12); they carry the principal, never the enrolment token or the address. Phase 7 adds `authentication.retention-applied` (§13), with no principal and with `counts` (`AuthenticationRetentionCounts`), the only event that carries it. Phase 8 adds `authentication.service-credential-issued`, `-revoked` and `-expiring` and `authentication.service-token-issued` (§14): their `principalId` is the service identity, and they carry `credential` (`AuthenticationEventCredential`: identifier, kind, expiry and, when revoked, `endedHow`), and `actorId`, the person, when one issued or revoked it; never the secret, key or token. Sign-in failures carry a machine-readable `reason`, such as `invalid-credentials`, `account-locked`, `rate-limited`, `totp-replayed` or `user-not-verified`.
 
 Events MUST NOT contain credentials, one-time codes, tokens, session secrets or email addresses. `client.ipAddress` and `client.userAgent` are personal data. The sink owner is responsible for their retention.
 
@@ -117,6 +121,9 @@ The record is part of the recovery: if it cannot be written, the reset fails, an
 | `retention.recoveryDays` | 365 | 30–730. How long a credential-recovery record is kept (§13). |
 | `retention.tokenDays` | 30 | 1–365. How long an expired break-glass enrolment token or engine verification value is kept (§13). |
 | `retention.riskTreatment` | `null` | A reference to the host's documented risk treatment; required when any retention period is below its default. |
+| `serviceCredentials.credentialDays` | 90 | 1–365. How long a service identity's secret or registered key stays valid (§14). |
+| `serviceCredentials.tokenMinutes` | 15 | 5–60. How long a service token stays valid (§14). |
+| `serviceCredentials.riskTreatment` | `null` | Required when either is longer than its default: a longer-lived credential or token gives a leaked one longer to be used. |
 
 The defaults follow ASVS 5.0 Level 2 and NIST SP 800-63-4 AAL2 guidance. A host that loosens a default MUST record the gap and its risk treatment (Security Architecture §12).
 
@@ -135,6 +142,7 @@ The host supplies these from a Nitro plugin. See [composition-contract.md](compo
 | `provideAuthenticationPolicy` | `AuthenticationPolicyInput` | No, the secure defaults apply |
 | `provideAuthenticationClock` | `AuthenticationClock` (`now(): Date`; §6.2) | No, the system clock applies |
 | `provideAuthenticationLegalHolds` | `AuthenticationLegalHolds` (`covers({ kind: 'person', id })`; §13) | No: without it, every credential-recovery record is kept |
+| `provideAuthenticationServiceGovernance` | `AuthenticationServiceGovernance` (`mayManage({ principal, serviceIdentityId })`; §14) | No: without it, every service-credential request is `forbidden` |
 
 `PostgresPoolLike` is a structural interface satisfied by a `pg` `Pool`. The contract does not depend on the driver package.
 
@@ -154,9 +162,9 @@ The host also acts on Identity's events with these server helpers (§7), althoug
 
 | Identity event | Helper |
 |---|---|
-| `identity.paused`, `identity.suspended`, `identity.closure-requested` | `revokeAuthenticationSessions(principalId)` |
+| `identity.paused`, `identity.suspended`, `identity.closure-requested` | `revokeAuthenticationSessions(principalId)` (a service identity's tokens too) |
 | `identity.provisioning-expired` | `discardAuthenticationAccount(principalId)` (only an unverified account) |
-| `identity.closed` | `deleteAuthenticationAccount(principalId)` (credentials, sessions and the sign-in identifier) |
+| `identity.closed` | `deleteAuthenticationAccount(principalId)` (credentials, sessions and the sign-in identifier; a service identity's credentials and tokens) |
 
 ### 6.2 Clock
 
@@ -181,20 +189,20 @@ These are auto-imported into the host's server code:
 | `requiredAssuranceLevel()` | `'aal2'` when the policy requires MFA, otherwise `'aal1'`. |
 | `migrateAuthenticationDatabase()` | Applies pending migrations to the capability schema. Requests wait for it to finish. |
 | `getAuthenticationCredentialRecovery(principalId)` | The principal's latest credential recovery (`AuthenticationCredentialRecovery`: `principalId`, `recoveredAt`, `method`), or `null` (§4.1). |
-| `revokeAuthenticationSessions(principalId)` | Ends every session of the principal; returns how many (§6.1). |
+| `revokeAuthenticationSessions(principalId)` | Ends every session of the principal, and every token of a service identity (its credentials stay); returns how many (§6.1). |
 | `discardAuthenticationAccount(principalId)` | Removes an account whose sign-in identifier was never verified; `authentication.account-deleted` (§6.1). |
-| `deleteAuthenticationAccount(principalId)` | Deletes an account with its credentials, sessions and sign-in identifier; `authentication.account-deleted` (§6.1). |
+| `deleteAuthenticationAccount(principalId)` | Deletes an account with its credentials, sessions and sign-in identifier; `authentication.account-deleted` (§6.1). For a service identity, deletes its credentials and tokens, with `authentication.service-credential-revoked` (`identity-closed`) for each that was active (§14). |
 | `listAuthenticationCredentialRecoveries({ after?, limit? })` | Recoveries in the order they happened, up to `limit` (default 100, at most 1000), with `next` to pass as `after`; a principal recovered again moves to a later page. For the host's reconciliation with Identity (§4.1). |
 | `provisionAuthenticationBreakGlass({ identityId, address, correlationId })` | Creates a break-glass identity's passkey-only account and returns `{ enrolmentToken, expiresAt }` (§12). Operator function: server-only, never an endpoint. |
 | `rotateAuthenticationBreakGlass({ identityId, correlationId })` | Deletes the break-glass account's passkeys, ends its sessions, replaces any outstanding token and returns a new `{ enrolmentToken, expiresAt }` (§12). Server-only. |
-| `runAuthenticationMaintenance({ limit? })` | Applies the retention schedules (§13) and returns `{ retention }` with the counts deleted. Server-only: the host schedules it, never an endpoint. |
+| `runAuthenticationMaintenance({ limit? })` | Ends expired service credentials and warns of expiring ones (§14), applies the retention schedules (§13) and returns `{ retention, serviceCredentials: { expired, expiring } }`. Server-only: the host schedules it, never an endpoint. |
 | `exportAuthenticationData({ principalId, correlationId })` | Authentication's part of a data-subject access request (`AuthenticationDataExport`), or `null` without an account: the sign-in identifier and whether it was verified, whether a password is set, linked providers, passkeys (name, when added, whether backed up), whether TOTP is enrolled and how many backup codes remain, the sessions in force (times and a coarse client description) and the latest credential recovery. Never a password hash, secret, code, key, token or IP address, and no profile data, which is Profile's. Server-only: the host calls it through iam-integration's coordination adapter, for Profile, which assembles the archive ([data-subject requests](https://github.com/nuxt4-layers/iam-integration/blob/3fb6866e0b6b7abbdf599ea06df9d4b8508482f5/docs/processes/data-subject-requests.md)). |
 
 Every protected host operation MUST call `requireAuthenticatedPrincipal` (or pass the principal to Authorization). Route middleware is not a security boundary.
 
 ## 8. HTTP endpoints
 
-All endpoints live under `/api/authentication`. Every state-changing request must carry an `Origin` (or `Referer`) header matching `NUXT_AUTHENTICATION_BASE_URL`, otherwise it fails with `origin-rejected` (403). Bodies are JSON and strictly validated, so unknown fields are rejected.
+All endpoints live under `/api/authentication`. Every state-changing request must carry an `Origin` (or `Referer`) header matching `NUXT_AUTHENTICATION_BASE_URL`, otherwise it fails with `origin-rejected` (403); only the service token endpoint, which reads no cookie, is exempt (§14). Bodies are JSON and strictly validated, so unknown fields are rejected. These endpoints never read a service's bearer token: they are a person's.
 
 | Method and path | Body | Success | Notes |
 |---|---|---|---|
@@ -244,6 +252,17 @@ Gated by a one-time enrolment token, not a session (§12). Every refusal (an unk
 |---|---|---|---|---|
 | `POST /break-glass/enrolment-options` | token | `{ token }` | 200 WebAuthn creation options | `residentKey: 'required'`, `userVerification: 'required'`, `attestation: 'none'`, the engine's relying party. Binds a fresh challenge to the token, replacing any earlier one. |
 | `POST /break-glass/enrolment` | token | `{ token, response, name? }` | 200 `{ status: 'passkey-registered' }` | Uses the challenge once, refuses an authenticator that did not verify the user, stores the passkey and consumes the token. Sets no session cookie and ends nothing else. `authentication.break-glass-enrolled`, and a security notice to the account's address. |
+
+### Service identity endpoints
+
+See §14.
+
+| Method and path | Access | Body | Success | Notes |
+|---|---|---|---|---|
+| `POST /service-token` | the service's credential | form or JSON: `grant_type=client_credentials`, and the secret (HTTP Basic, or `client_id` and `client_secret`) or `client_assertion_type` and `client_assertion` | 200 `{ access_token, token_type: 'Bearer', expires_in }` | OAuth 2.0 client credentials. Refusals: 400 `{ error: 'invalid_request' \| 'unsupported_grant_type' }`, 401 `{ error: 'invalid_client' }`, 503 `{ error: 'temporarily_unavailable' }`. No origin check, no cookie. `Cache-Control: no-store`. |
+| `GET /service-identities/:identityId/credentials` | standard, and the governance port | | 200 `{ credentials }` | The active `AuthenticationServiceCredential[]`, oldest first. `Cache-Control: no-store`. |
+| `POST /service-identities/:identityId/credentials` | phishing resistant within 15 minutes, and the governance port | `{ kind: 'secret' }` or `{ kind: 'public-key', publicKey }` | 201 `{ credential, clientSecret }` | The secret is returned this once (`null` for a key). `credential-limit-reached` beyond two. `authentication.service-credential-issued`. |
+| `DELETE /service-identities/:identityId/credentials/:credentialId` | as issuing | | 204 | Ends the credential's tokens at once. `authentication.service-credential-revoked`. Another identity's credential answers `validation-failed`. |
 
 ### Federation endpoints
 
@@ -449,5 +468,37 @@ Authentication's schedules under iam-integration's [retention process](https://g
 - The shortest recovery period (30 days) outlasts Identity's longest recovery hold (336 hours), so a record is never deleted while the hold it reconciles (§4.1) can still run.
 - Before deleting a credential-recovery record, maintenance asks the host's legal-hold port (`provideAuthenticationLegalHolds`, normally iam-integration's `legalHoldsFromMembers` with the `authentication` part, which reads Profile's holds on people). Without the port, or when it fails or answers anything but `false`, the record is kept for the next run. A record recovered again since the run read it is kept.
 - A run reads at most `limit` recovery records (default 1 000, at most 10 000); the rest wait for the next run.
-- A run that deleted anything emits `authentication.retention-applied` with counts by kind (`sessions`, `credentialRecoveries`, `enrolmentTokens`, `verifications`), never an identifier.
+- A run that deleted anything emits `authentication.retention-applied` with counts by kind (`sessions`, `credentialRecoveries`, `enrolmentTokens`, `verifications`, `serviceTokens`, `serviceCredentials`), never an identifier.
+- Service tokens, from their expiry, and service credentials, from when they were revoked or expired, are kept for `retention.tokenDays`; the counts add `serviceTokens` and `serviceCredentials`.
 - Accounts, credentials and sign-in identifiers have no schedule: they last as long as the account, and go with it (`deleteAuthenticationAccount`, on Identity's `identity.closed`). Authentication holds nothing scoped to a group or tenant, so it takes no part in group deletion or tenant shutdown.
+
+## 14. Service identities
+
+A service identity is software acting on a group's behalf (iam-integration's [service identities process](https://github.com/nuxt4-layers/iam-integration/blob/69eb3df32eed2a62257e711243976cbc268c1b62/docs/processes/service-identities.md)). Identity holds it, owned by a group and safely named; Authentication holds its machine credentials and authenticates it; Authorisation decides what it may do from its memberships. It has no sign-in identifier, password, passkey, session or personal data here.
+
+### Credentials
+
+- **Kinds** (`AUTHENTICATION_SERVICE_CREDENTIAL_KINDS`): a **client secret**, 32 random bytes (base64url), returned once and stored only as an HMAC-SHA-256 digest keyed from the layer's secret for this purpose; or a **public key**, a public JWK registered by the administrator for signed assertions (`private_key_jwt`, RFC 7523): `ES256` on P-256 or `EdDSA` on Ed25519, nothing else. A key with any private member, or a point off its curve, is refused. Only the public members and the RFC 7638 thumbprint are stored.
+- **Lifetime**: `serviceCredentials.credentialDays` (90 days by default, 1–365). At most two are active per identity (`AUTHENTICATION_SERVICE_CREDENTIALS_ACTIVE_MAX`), counted under a per-identity lock, so a new one can be rolled out before the old is revoked; the same key is never registered twice.
+- **Who manages them**: a signed-in person, never a service, whom the host's service-governance port allows now. The port is normally iam-integration's `authenticationServiceGovernanceFromIdentity` ([adapters](https://github.com/nuxt4-layers/iam-integration/blob/69eb3df32eed2a62257e711243976cbc268c1b62/docs/adapters.md#service-identities)): Identity answers true only for an active service identity whose owning group's `identity.service-identities:manage` the person holds. Without the port, or when it says no, `forbidden`, whether or not the identity exists; when it fails, `unavailable`. Issuing and revoking also need a phishing-resistant session (a passkey) authenticated within the policy's `reauthentication.maxAgeSeconds`, at most 15 minutes. No second approver: the owners are told instead.
+- **Notices**: `authentication.service-credential-issued` and `-revoked` (with `actorId`), and, from maintenance, `-expiring` once 14 days before expiry (`AUTHENTICATION_SERVICE_CREDENTIAL_WARNING_DAYS`) and `-revoked` with `endedHow: 'expired'` when it ends. The host relays them through iam-integration's `createServiceCredentialNoticeHandler` to the owning group's owners. Notices are best effort; listing the credentials shows the truth.
+
+### The token endpoint
+
+`POST /api/authentication/service-token` takes the OAuth 2.0 client-credentials grant (RFC 6749 §4.4) as a form (`application/x-www-form-urlencoded`) or JSON body. The client identifier is the service identity's identifier. The client authenticates exactly one way: HTTP Basic, `client_id` with `client_secret` in the body, or `client_assertion_type` `urn:ietf:params:oauth:client-assertion-type:jwt-bearer` with a `client_assertion`. A parameter given twice is `invalid_request`.
+
+An assertion must be signed by one of the identity's active keys (`kid`, when present, names its thumbprint or credential), name the identity as `iss` and `sub` and the token endpoint's absolute URL in `aud`, expire within 5 minutes, carry a `jti` of 16 to 200 characters, and have no `crit` header; `iat` and `nbf` may be at most 60 seconds ahead. Each `jti` is used once.
+
+Then the identity port must answer the identity's standing `allowed`: without an identity port no service identity receives a token. Every failed client authentication answers `invalid_client` (401), whatever the reason (an unknown identity, a wrong, revoked or expired credential, a replayed or invalid assertion, a refused standing, a lockout), records a `authentication.sign-in-failed` without a principal, and counts against the identity's lockout and the caller's throttle, as for an account. A failing identity port answers `temporarily_unavailable` (503).
+
+The answer is an opaque token, 32 random bytes, stored only as a keyed digest, valid for `serviceCredentials.tokenMinutes` (15 minutes by default, 5–60), with `authentication.service-token-issued` (never the token). Revoking or expiring the credential that obtained it ends it at once.
+
+### Using a token
+
+The service sends `Authorization: Bearer <token>` to the host's own routes. `getAuthenticatedPrincipal` and `requireAuthenticatedPrincipal` then look the token up and read the identity's standing on every request, and give a principal of kind `service`: `aal2`, methods `['client-secret']` or `['client-assertion']`, never phishing resistant (so never enough for a `critical` permission), authenticated when the token was issued, expiring with it. A refused standing ends the identity's tokens at once; a failing identity port is `unavailable`. A request that presents a bearer token is judged by it alone, never by a cookie it also carries, and a malformed one is no principal. The layer's own endpoints (`/api/authentication/*`) never read a bearer token: a token is never a session, sets no cookie and reaches nothing a person's session does.
+
+### Suspension and closure
+
+- On `identity.suspended`, `revokeAuthenticationSessions` ends the identity's tokens; its credentials stay, and work again once it is reinstated. Access never waits for the event: the standing is read on every request.
+- On `identity.closed`, `deleteAuthenticationAccount` deletes its credentials, tokens and remembered assertions.
+

@@ -15,6 +15,9 @@ import { quoteSchema } from '../database/migrations'
  *   is kept for the next run.
  * - Break-glass enrolment tokens and engine verification values, from their
  *   expiry. A used token is already gone.
+ * - Service tokens, from their expiry, and ended service credentials, from
+ *   their ending, both for `tokenDays`. A revoked credential's tokens are
+ *   already gone.
  */
 
 const DAY = 86_400_000
@@ -48,6 +51,14 @@ export function createRetention(pool: PostgresPoolLike, schema: string) {
         `with gone as (delete from ${s}."verification" where "expiresAt" < $1 returning 1) select count(*)::int as n from gone`,
         [before(retention.tokenDays, engineAt)],
       )
+      const serviceTokens = await count(
+        `with gone as (delete from ${s}."service_token" where "expires_at" < $1 returning 1) select count(*)::int as n from gone`,
+        [before(retention.tokenDays)],
+      )
+      const serviceCredentials = await count(
+        `with gone as (delete from ${s}."service_credential" where "ended_at" < $1 returning 1) select count(*)::int as n from gone`,
+        [before(retention.tokenDays)],
+      )
 
       let credentialRecoveries = 0
       if (holds) {
@@ -74,7 +85,7 @@ export function createRetention(pool: PostgresPoolLike, schema: string) {
         }
       }
 
-      return { sessions, credentialRecoveries, enrolmentTokens, verifications }
+      return { sessions, credentialRecoveries, enrolmentTokens, verifications, serviceTokens, serviceCredentials }
     },
   }
 }

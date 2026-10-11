@@ -9,7 +9,7 @@ import { quoteSchema } from '../database/migrations'
  * accounts are throttled identically and no address is stored in plain text.
  */
 
-export type ThrottleKey = `account:${string}` | `client:${string}` | `reset:${string}`
+export type ThrottleKey = `account:${string}` | `client:${string}` | `reset:${string}` | `service:${string}`
 
 export function accountKey(email: string): ThrottleKey {
   return `account:${createHash('sha256').update(email.trim().toLowerCase()).digest('hex')}`
@@ -18,6 +18,11 @@ export function accountKey(email: string): ThrottleKey {
 /** Limits password-reset emails per address, preventing mail flooding. */
 export function resetKey(email: string): ThrottleKey {
   return `reset:${createHash('sha256').update(email.trim().toLowerCase()).digest('hex')}`
+}
+
+/** A service identity's failed client authentications at the token endpoint; locked out like an account. */
+export function serviceKey(identityId: string): ThrottleKey {
+  return `service:${createHash('sha256').update(identityId).digest('hex')}`
 }
 
 export function clientKey(ip: string): ThrottleKey {
@@ -61,7 +66,7 @@ export function createSignInThrottle(pool: PostgresPoolLike, schema: string, pol
         [key, policy.windowSeconds],
       )
       const row = rows[0]!
-      if (Number(row.failures) >= limit && row.locked !== true && key.startsWith('account:')) {
+      if (Number(row.failures) >= limit && row.locked !== true && (key.startsWith('account:') || key.startsWith('service:'))) {
         await query(`update ${table} set "locked_until" = now() + make_interval(secs => $2) where "key" = $1`, [key, policy.lockoutSeconds])
         return true
       }
