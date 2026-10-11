@@ -13,6 +13,18 @@ updates:
       development:
         dependency-type: development
         update-types: [minor, patch]
+    # Major versions held back until the toolchain supports them:
+    # - typescript 7: vue-tsc (nuxt typecheck) cannot load it yet;
+    # - h3 2: Nuxt 4's server runs on h3 1, whatever the layer declares;
+    # - @types/node: kept at the Node major that CI and hosts run, so the
+    #   typecheck refuses APIs that do not exist at runtime.
+    ignore:
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: h3
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /
     schedule:
