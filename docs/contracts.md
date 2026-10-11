@@ -502,3 +502,6 @@ The service sends `Authorization: Bearer <token>` to the host's own routes. `get
 - On `identity.suspended`, `revokeAuthenticationSessions` ends the identity's tokens; its credentials stay, and work again once it is reinstated. Access never waits for the event: the standing is read on every request.
 - On `identity.closed`, `deleteAuthenticationAccount` deletes its credentials, tokens and remembered assertions.
 
+## 15. Versioning
+
+This is contract version 1, provided by package 1.0, and frozen for 1.x. From 1.0 the package follows [semantic versioning](https://semver.org/): a change that breaks the contract (a removed or narrowed type, function, endpoint, event or port, or a stricter rule a host must act on) needs a new contract version and a major release; an addition is a minor release; a fix is a patch. Each release is listed in `CHANGELOG.md`.
