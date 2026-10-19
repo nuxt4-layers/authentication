@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize, relative } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toPosix } from './support/paths'
 
 /**
  * The layer is three parts with one-way dependencies (docs/architecture.md):
@@ -15,14 +16,14 @@ const root = normalize(join(import.meta.dirname, '..'))
 function files(dir: string): string[] {
   return readdirSync(join(root, dir), { recursive: true, encoding: 'utf8' })
     .filter(file => /\.(ts|vue)$/.test(file))
-    .map(file => join(dir, file))
+    .map(file => toPosix(join(dir, file)))
 }
 
 /** Import specifiers, with relative ones resolved to repository paths. */
 function imports(file: string): string[] {
   const source = readFileSync(join(root, file), 'utf8')
   return [...source.matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)].map(([, specifier]) =>
-    specifier!.startsWith('.') ? relative(root, join(root, dirname(file), specifier!)) : specifier!)
+    specifier!.startsWith('.') ? toPosix(relative(root, join(root, dirname(file), specifier!))) : specifier!)
 }
 
 const inLayer = (path: string, ...dirs: string[]) => dirs.some(dir => path === dir || path.startsWith(`${dir}/`))
