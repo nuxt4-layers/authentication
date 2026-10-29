@@ -60,7 +60,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.6",
     "@types/pg": "^8.23.1",
-    "nuxt": "^4.5.2",
+    "nuxt": "^4.6.2",
     "oauth2-mock-server": "^9.2.0",
     "pg": "^8.23.1",
     "tailwindcss": "^4.3.3",
